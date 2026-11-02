@@ -1460,6 +1460,22 @@ struct InteractiveContext {
             case BtnDeck: {
                 uint8_t nextDeck = (static_cast<uint8_t>(CardTextureCache::instance().currentDeckTheme()) + 1u) %
                                    static_cast<uint8_t>(DeckThemeId::Count);
+#if defined(__EMSCRIPTEN__)
+                if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::SteampunkAi) {
+                    std::error_code ec;
+                    bool exists = std::filesystem::exists("decks/steampunk.eats", ec) ||
+                                  std::filesystem::exists("/decks/steampunk.eats", ec) ||
+                                  std::filesystem::exists("/user/steampunk.eats", ec);
+                    if (!exists) {
+                        EM_ASM({
+                            if (window.loadSteampunkDeck) {
+                                window.loadSteampunkDeck();
+                            }
+                        });
+                        break;
+                    }
+                }
+#endif
                 CardTextureCache::instance().loadDeckTheme(static_cast<DeckThemeId>(nextDeck));
                 if (renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
                     CardTextureCache::instance().buildGpuAtlas(renderer);

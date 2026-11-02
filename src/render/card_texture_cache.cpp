@@ -484,6 +484,8 @@ bool CardTextureCache::loadDeckTheme(DeckThemeId theme, int cardW, int cardH) {
         // 1. Try modern self-contained .eats deck recipe (PNG embedded in script)
         const std::string candidateEats[] = {
             "decks/steampunk.eats",
+            "/decks/steampunk.eats",
+            "/user/steampunk.eats",
             "../decks/steampunk.eats",
             "../../decks/steampunk.eats"
         };
@@ -525,6 +527,12 @@ bool CardTextureCache::loadDeckTheme(DeckThemeId theme, int cardW, int cardH) {
 }
 
 bool CardTextureCache::loadEatsDeck(const std::string& eatsFilePath, int cardW, int cardH) {
+    if (eatsFilePath.find("steampunk") != std::string::npos) {
+        currentTheme_ = DeckThemeId::SteampunkAi;
+    } else if (eatsFilePath.find("classic") != std::string::npos) {
+        currentTheme_ = DeckThemeId::ClassicSvg;
+    }
+
     std::string binPath = eatsFilePath;
     size_t dotPos = binPath.rfind('.');
     if (dotPos != std::string::npos) {

@@ -211,6 +211,134 @@
             transform: translateX(-50%) translateY(0);
             opacity: 1;
         }
+
+        /* Floating Luxury Web Toolbar */
+        .sol-web-toolbar {
+            position: absolute;
+            bottom: 12px;
+            right: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .sol-web-btn {
+            background: rgba(13, 23, 15, 0.88);
+            border: 1px solid #3c5440;
+            color: #d1d5db;
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            outline: none;
+        }
+
+        .sol-web-btn:hover {
+            border-color: #d4af37;
+            color: #f3e5ab;
+            background: rgba(22, 38, 25, 0.95);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75);
+        }
+
+        .sol-web-btn:active {
+            transform: translateY(0);
+        }
+
+        .sol-web-btn.active-steampunk {
+            border-color: #d4af37;
+            color: #fef08a;
+            background: rgba(34, 56, 38, 0.95);
+        }
+
+        /* Modal Dialog for Gist / URL Import */
+        #sol-modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 8, 6, 0.75);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10002;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        #sol-modal-backdrop.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sol-modal-box {
+            background: radial-gradient(circle at center, #18281b 0%, #0d170f 100%);
+            border: 2px solid #4a664f;
+            border-radius: 12px;
+            padding: 24px 30px;
+            width: 460px;
+            max-width: 90vw;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .sol-modal-title {
+            font-family: 'Cinzel', serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #e8d08c;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+
+        .sol-modal-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        .sol-modal-input {
+            width: 100%;
+            background: rgba(8, 13, 9, 0.85);
+            border: 1px solid #3c5440;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #f0fdf4;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease;
+        }
+
+        .sol-modal-input:focus {
+            border-color: #d4af37;
+        }
+
+        .sol-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
@@ -241,6 +369,33 @@
 
     <!-- Hidden File Picker for manual file loading -->
     <input type="file" id="eats-file-picker" accept=".eats" style="display: none;">
+
+    <!-- Floating Luxury Web Toolbar -->
+    <div class="sol-web-toolbar">
+        <button id="btn-load-steampunk" class="sol-web-btn" title="Stream high-res Steampunk AI Deck on demand (26MB)">
+            <span>⚜️</span>
+            <span id="btn-steampunk-label">Steampunk Deck</span>
+        </button>
+        <button id="btn-open-gist-modal" class="sol-web-btn" title="Load custom deck or theme from Gist or raw URL">
+            <span>🔗</span>
+            <span>Import Gist / URL</span>
+        </button>
+    </div>
+
+    <!-- Gist / URL Modal Dialog -->
+    <div id="sol-modal-backdrop">
+        <div class="sol-modal-box">
+            <div class="sol-modal-title">LOAD .EATS RECIPE</div>
+            <div class="sol-modal-desc">
+                Enter a GitHub Gist ID, full Gist URL, or any raw <span style="color:#e8d08c; font-family:'Roboto Mono',monospace;">.eats</span> link:
+            </div>
+            <input type="text" id="sol-modal-url-input" class="sol-modal-input" placeholder="e.g. 7f8a9b... or https://gist.github.com/...">
+            <div class="sol-modal-actions">
+                <button id="btn-modal-cancel" class="sol-web-btn">Cancel</button>
+                <button id="btn-modal-submit" class="sol-web-btn" style="border-color:#d4af37; color:#fef08a;">Load Recipe</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const statusText = document.getElementById('status-text');
@@ -323,6 +478,7 @@
 
                 // Write into Emscripten virtual filesystem (MEMFS)
                 if (typeof FS !== 'undefined') {
+                    try { FS.mkdir('/decks'); } catch (err) {}
                     try { FS.mkdir('/user'); } catch (err) {}
                     const vPath = '/user/' + file.name;
                     FS.writeFile(vPath, data);
@@ -340,6 +496,231 @@
             } catch (err) {
                 console.error('[Drop Error]', err);
                 showToast('Error importing file: ' + err.message);
+            }
+        }
+
+        async function loadEatsFromUrl(url, displayName = '') {
+            let filename = displayName || url.split('/').pop().split('?')[0] || 'imported.eats';
+            if (!filename.endsWith('.eats')) filename += '.eats';
+
+            showToast('Downloading ' + filename + ' ...', 10000);
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                }
+
+                const contentLength = response.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength, 10) : 0;
+                let loaded = 0;
+                let data;
+
+                if (response.body && total > 0) {
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        loaded += value.length;
+                        const pct = Math.round((loaded / total) * 100);
+                        const mbLoaded = (loaded / (1024 * 1024)).toFixed(1);
+                        const mbTotal = (total / (1024 * 1024)).toFixed(1);
+                        showToast(`Downloading ${filename} (${mbLoaded}/${mbTotal} MB, ${pct}%)...`, 3000);
+                    }
+                    data = new Uint8Array(loaded);
+                    let offset = 0;
+                    for (const chunk of chunks) {
+                        data.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+                } else {
+                    const buf = await response.arrayBuffer();
+                    data = new Uint8Array(buf);
+                }
+
+                showToast('Parsing & building GPU atlas for ' + filename + ' ...', 8000);
+
+                if (typeof FS !== 'undefined') {
+                    try { FS.mkdir('/decks'); } catch (err) {}
+                    try { FS.mkdir('/user'); } catch (err) {}
+                    const vPath = '/decks/' + filename;
+                    FS.writeFile(vPath, data);
+
+                    if (typeof Module !== 'undefined' && Module.ccall) {
+                        const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], [vPath]);
+                        if (ok) {
+                            showToast('Successfully loaded: ' + filename, 4000);
+                            return true;
+                        } else {
+                            showToast('Failed to parse ' + filename, 5000);
+                            return false;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[Remote Load Error]', err);
+                showToast('Failed to load ' + filename + ': ' + err.message, 5000);
+                return false;
+            }
+        }
+
+        async function loadFromGist(gistParam) {
+            let gistId = gistParam.trim();
+            if (gistId.includes('githubusercontent.com') && gistId.includes('/raw/')) {
+                return await loadEatsFromUrl(gistId);
+            }
+            const match = gistId.match(/([a-f0-9]{20,32})/i) || gistId.match(/\/([a-f0-9]+)$/i);
+            if (match) {
+                gistId = match[1];
+            }
+
+            showToast('Querying GitHub Gist ' + gistId + '...', 6000);
+            try {
+                const resp = await fetch(`https://api.github.com/gists/${gistId}`);
+                if (!resp.ok) throw new Error(`GitHub Gist API error: ${resp.status}`);
+                const gistData = await resp.json();
+                const files = gistData.files;
+                let targetFile = null;
+                for (const fname in files) {
+                    if (fname.endsWith('.eats')) {
+                        targetFile = files[fname];
+                        break;
+                    }
+                }
+                if (!targetFile) {
+                    const firstKey = Object.keys(files)[0];
+                    targetFile = files[firstKey];
+                }
+                if (targetFile && targetFile.raw_url) {
+                    return await loadEatsFromUrl(targetFile.raw_url, targetFile.filename);
+                } else {
+                    throw new Error('No valid file found in Gist.');
+                }
+            } catch (err) {
+                console.error('[Gist Error]', err);
+                showToast('Error loading Gist: ' + err.message, 5000);
+                return false;
+            }
+        }
+
+        let isSteampunkActive = false;
+        window.loadSteampunkDeck = async function() {
+            const btnLabel = document.getElementById('btn-steampunk-label');
+            const btn = document.getElementById('btn-load-steampunk');
+
+            // If already downloaded and active, toggle back to Classic
+            if (isSteampunkActive) {
+                if (typeof FS !== 'undefined' && typeof Module !== 'undefined' && Module.ccall) {
+                    const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], ['decks/classic.eats']);
+                    if (ok) {
+                        isSteampunkActive = false;
+                        if (btnLabel) btnLabel.innerText = 'Steampunk Deck';
+                        if (btn) btn.classList.remove('active-steampunk');
+                        showToast('Switched to Classic SVG Deck.');
+                        return;
+                    }
+                }
+            }
+
+            // Check if steampunk.eats is already present in MEMFS
+            if (typeof FS !== 'undefined') {
+                let exists = false;
+                try {
+                    const stat = FS.stat('/decks/steampunk.eats');
+                    if (stat && stat.size > 0) exists = true;
+                } catch (e) {}
+
+                if (exists && typeof Module !== 'undefined' && Module.ccall) {
+                    const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], ['/decks/steampunk.eats']);
+                    if (ok) {
+                        isSteampunkActive = true;
+                        if (btnLabel) btnLabel.innerText = 'Classic SVG Deck';
+                        if (btn) btn.classList.add('active-steampunk');
+                        showToast('Activated Steampunk Deck.');
+                        return;
+                    }
+                }
+            }
+
+            // Otherwise, stream download from static ./decks/steampunk.eats
+            const success = await loadEatsFromUrl('./decks/steampunk.eats', 'steampunk.eats');
+            if (success) {
+                isSteampunkActive = true;
+                if (btnLabel) btnLabel.innerText = 'Classic SVG Deck';
+                if (btn) btn.classList.add('active-steampunk');
+            }
+        };
+
+        function setupWebControls() {
+            const btnSteampunk = document.getElementById('btn-load-steampunk');
+            if (btnSteampunk) {
+                btnSteampunk.addEventListener('click', () => {
+                    window.loadSteampunkDeck();
+                });
+            }
+
+            const modal = document.getElementById('sol-modal-backdrop');
+            const btnOpenModal = document.getElementById('btn-open-gist-modal');
+            const btnCancelModal = document.getElementById('btn-modal-cancel');
+            const btnSubmitModal = document.getElementById('btn-modal-submit');
+            const urlInput = document.getElementById('sol-modal-url-input');
+
+            if (btnOpenModal && modal) {
+                btnOpenModal.addEventListener('click', () => {
+                    modal.classList.add('active');
+                    if (urlInput) {
+                        urlInput.value = '';
+                        setTimeout(() => urlInput.focus(), 100);
+                    }
+                });
+            }
+
+            if (btnCancelModal && modal) {
+                btnCancelModal.addEventListener('click', () => {
+                    modal.classList.remove('active');
+                });
+            }
+
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) modal.classList.remove('active');
+                });
+            }
+
+            if (btnSubmitModal && urlInput) {
+                const submitAction = async () => {
+                    const val = urlInput.value.trim();
+                    if (!val) return;
+                    modal.classList.remove('active');
+                    if (val.includes('gist.github.com') || (!val.startsWith('http') && val.length >= 20 && !val.includes('/'))) {
+                        await loadFromGist(val);
+                    } else {
+                        await loadEatsFromUrl(val);
+                    }
+                };
+                btnSubmitModal.addEventListener('click', submitAction);
+                urlInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') submitAction();
+                    if (e.key === 'Escape') modal.classList.remove('active');
+                });
+            }
+        }
+
+        async function processUrlParameters() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('gist')) {
+                const gist = params.get('gist');
+                await loadFromGist(gist);
+            } else if (params.has('url')) {
+                const url = params.get('url');
+                await loadEatsFromUrl(url);
+            } else if (params.has('deck')) {
+                const deck = params.get('deck').toLowerCase();
+                if (deck === 'steampunk') {
+                    await window.loadSteampunkDeck();
+                }
             }
         }
 
@@ -365,6 +746,8 @@
             postRun: [
                 function() {
                     window.hideAppLoadingScreen();
+                    setupWebControls();
+                    processUrlParameters();
                 }
             ],
             print: function(text) {

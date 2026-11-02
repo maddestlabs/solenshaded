@@ -158,6 +158,16 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "`n[+] Build successful!" -ForegroundColor Green
 
+# Stage on-demand decks (served statically alongside WASM without payload bloat)
+$webDecksDir = Join-Path $buildDir "decks"
+if (-not (Test-Path $webDecksDir)) {
+    New-Item -ItemType Directory -Path $webDecksDir -Force | Out-Null
+}
+$steampunkSrc = Join-Path $rootDir "decks\steampunk.eats"
+if (Test-Path $steampunkSrc) {
+    Copy-Item -Path $steampunkSrc -Destination (Join-Path $webDecksDir "steampunk.eats") -Force
+}
+
 # ------------------------------------------------------------------
 # Payload Analysis (Raw vs Gzip Wire Transfer)
 # ------------------------------------------------------------------
