@@ -1,0 +1,326 @@
+[
+  {
+    "index": 0,
+    "card_name": "spades_01_ace",
+    "source_reference": "png/spades_01_ace.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Central monumental ornate Spades ace crest with Victorian Steampunk mechanical details and flourish. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 1,
+    "card_name": "spades_02",
+    "source_reference": "png/spades_02.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 02 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 2,
+    "card_name": "spades_03",
+    "source_reference": "png/spades_03.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 03 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 3,
+    "card_name": "spades_04",
+    "source_reference": "png/spades_04.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 04 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 4,
+    "card_name": "spades_05",
+    "source_reference": "png/spades_05.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 05 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 5,
+    "card_name": "spades_06",
+    "source_reference": "png/spades_06.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 06 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 6,
+    "card_name": "spades_07",
+    "source_reference": "png/spades_07.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 07 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 7,
+    "card_name": "spades_08",
+    "source_reference": "png/spades_08.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 08 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 8,
+    "card_name": "spades_09",
+    "source_reference": "png/spades_09.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 09 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 9,
+    "card_name": "spades_10",
+    "source_reference": "png/spades_10.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 10 of Spades with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 10,
+    "card_name": "spades_11_jack",
+    "source_reference": "png/spades_11_jack.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Young Jack knight/navigator of Spades with Victorian Steampunk gadgets, goggles, and ornate collar. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 11,
+    "card_name": "spades_12_queen",
+    "source_reference": "png/spades_12_queen.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Queen of Spades in noble Victorian Steampunk royal gown, diadems, gears, and intricate brass filigree. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 12,
+    "card_name": "spades_13_king",
+    "source_reference": "png/spades_13_king.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Monarch King of Spades wearing ornate Victorian Steampunk attire, holding a ceremonial scepter, clockwork details. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 13,
+    "card_name": "hearts_01_ace",
+    "source_reference": "png/hearts_01_ace.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Central monumental ornate Hearts ace crest with Victorian Steampunk mechanical details and flourish. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 14,
+    "card_name": "hearts_02",
+    "source_reference": "png/hearts_02.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 02 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 15,
+    "card_name": "hearts_03",
+    "source_reference": "png/hearts_03.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 03 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 16,
+    "card_name": "hearts_04",
+    "source_reference": "png/hearts_04.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 04 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 17,
+    "card_name": "hearts_05",
+    "source_reference": "png/hearts_05.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 05 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 18,
+    "card_name": "hearts_06",
+    "source_reference": "png/hearts_06.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 06 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 19,
+    "card_name": "hearts_07",
+    "source_reference": "png/hearts_07.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 07 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 20,
+    "card_name": "hearts_08",
+    "source_reference": "png/hearts_08.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 08 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 21,
+    "card_name": "hearts_09",
+    "source_reference": "png/hearts_09.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 09 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 22,
+    "card_name": "hearts_10",
+    "source_reference": "png/hearts_10.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 10 of Hearts with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 23,
+    "card_name": "hearts_11_jack",
+    "source_reference": "png/hearts_11_jack.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Young Jack knight/navigator of Hearts with Victorian Steampunk gadgets, goggles, and ornate collar. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 24,
+    "card_name": "hearts_12_queen",
+    "source_reference": "png/hearts_12_queen.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Queen of Hearts in noble Victorian Steampunk royal gown, diadems, gears, and intricate brass filigree. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 25,
+    "card_name": "hearts_13_king",
+    "source_reference": "png/hearts_13_king.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Monarch King of Hearts wearing ornate Victorian Steampunk attire, holding a ceremonial scepter, clockwork details. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 26,
+    "card_name": "clubs_01_ace",
+    "source_reference": "png/clubs_01_ace.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Central monumental ornate Clubs ace crest with Victorian Steampunk mechanical details and flourish. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 27,
+    "card_name": "clubs_02",
+    "source_reference": "png/clubs_02.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 02 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 28,
+    "card_name": "clubs_03",
+    "source_reference": "png/clubs_03.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 03 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 29,
+    "card_name": "clubs_04",
+    "source_reference": "png/clubs_04.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 04 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 30,
+    "card_name": "clubs_05",
+    "source_reference": "png/clubs_05.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 05 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 31,
+    "card_name": "clubs_06",
+    "source_reference": "png/clubs_06.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 06 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 32,
+    "card_name": "clubs_07",
+    "source_reference": "png/clubs_07.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 07 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 33,
+    "card_name": "clubs_08",
+    "source_reference": "png/clubs_08.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 08 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 34,
+    "card_name": "clubs_09",
+    "source_reference": "png/clubs_09.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 09 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 35,
+    "card_name": "clubs_10",
+    "source_reference": "png/clubs_10.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 10 of Clubs with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 36,
+    "card_name": "clubs_11_jack",
+    "source_reference": "png/clubs_11_jack.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Young Jack knight/navigator of Clubs with Victorian Steampunk gadgets, goggles, and ornate collar. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 37,
+    "card_name": "clubs_12_queen",
+    "source_reference": "png/clubs_12_queen.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Queen of Clubs in noble Victorian Steampunk royal gown, diadems, gears, and intricate brass filigree. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 38,
+    "card_name": "clubs_13_king",
+    "source_reference": "png/clubs_13_king.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Monarch King of Clubs wearing ornate Victorian Steampunk attire, holding a ceremonial scepter, clockwork details. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 39,
+    "card_name": "diamonds_01_ace",
+    "source_reference": "png/diamonds_01_ace.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Central monumental ornate Diamonds ace crest with Victorian Steampunk mechanical details and flourish. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 40,
+    "card_name": "diamonds_02",
+    "source_reference": "png/diamonds_02.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 02 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 41,
+    "card_name": "diamonds_03",
+    "source_reference": "png/diamonds_03.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 03 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 42,
+    "card_name": "diamonds_04",
+    "source_reference": "png/diamonds_04.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 04 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 43,
+    "card_name": "diamonds_05",
+    "source_reference": "png/diamonds_05.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 05 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 44,
+    "card_name": "diamonds_06",
+    "source_reference": "png/diamonds_06.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 06 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 45,
+    "card_name": "diamonds_07",
+    "source_reference": "png/diamonds_07.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 07 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 46,
+    "card_name": "diamonds_08",
+    "source_reference": "png/diamonds_08.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 08 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 47,
+    "card_name": "diamonds_09",
+    "source_reference": "png/diamonds_09.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 09 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 48,
+    "card_name": "diamonds_10",
+    "source_reference": "png/diamonds_10.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Playing card 10 of Diamonds with custom Victorian Steampunk suit pips and engraved vintage paper borders. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 49,
+    "card_name": "diamonds_11_jack",
+    "source_reference": "png/diamonds_11_jack.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Young Jack knight/navigator of Diamonds with Victorian Steampunk gadgets, goggles, and ornate collar. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 50,
+    "card_name": "diamonds_12_queen",
+    "source_reference": "png/diamonds_12_queen.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Queen of Diamonds in noble Victorian Steampunk royal gown, diadems, gears, and intricate brass filigree. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 51,
+    "card_name": "diamonds_13_king",
+    "source_reference": "png/diamonds_13_king.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Monarch King of Diamonds wearing ornate Victorian Steampunk attire, holding a ceremonial scepter, clockwork details. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 52,
+    "card_name": "card_back",
+    "source_reference": "png/card_back.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Symmetrical ornate Victorian Steampunk card back with dual intricate filigree borders and central brass medallion. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  },
+  {
+    "index": 53,
+    "card_name": "joker",
+    "source_reference": "png/joker.png",
+    "gemini_prompt": "Redraw this playing card in authentic Victorian Steampunk style. Subject: Court jester / mechanist in wild Victorian Steampunk attire juggling brass gears and steam valves. Maintain exact 750x1050 portrait aspect ratio and symmetrical layout. High contrast, woodblock engraving linework, antique paper texture, clean silhouette suitable for vector tracing."
+  }
+]

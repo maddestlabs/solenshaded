@@ -1,0 +1,642 @@
+#!/usr/bin/env python3
+"""
+SolEnshaded Complete Deck Asset & Pipeline Tool
+==============================================
+Provides a full end-to-end automated workflow:
+1. 'export-base': Slices the CC0 master SVG and binary cache into 54 standalone
+   individual card SVGs and PNGs with clear names and a manifest.
+2. 'generate-prompts': Generates specialized Gemini image-to-image prompts for all
+   54 cards for any custom theme (e.g. Victorian Steampunk, Eldritch, Cyberpunk).
+3. 'generate-ai': Calls Google GenAI (gemini-2.5-flash-image / gemini-3-pro-image)
+   via API to generate card illustrations, then vectorizes them with vtracer.
+4. 'assemble': Takes standalone card vector SVGs and assembles them with
+   mathematical precision into the master 9x6 grid SVG.
+5. 'auto-deck': End-to-end automation: generates AI cards -> vectorizes -> assembles
+   ready-to-play deck in decks/<theme>_svg.svg.
+"""
+
+import os
+import sys
+import json
+import time
+import struct
+import argparse
+import re
+import concurrent.futures
+from PIL import Image
+
+try:
+    import vtracer
+    HAS_VTRACER = True
+except ImportError:
+    HAS_VTRACER = False
+
+try:
+    from google import genai
+    from google.genai import types
+    HAS_GENAI = True
+except ImportError:
+    HAS_GENAI = False
+
+CARD_NAMES = [
+    # Spades (0..12)
+    "spades_01_ace", "spades_02", "spades_03", "spades_04", "spades_05",
+    "spades_06", "spades_07", "spades_08", "spades_09", "spades_10",
+    "spades_11_jack", "spades_12_queen", "spades_13_king",
+    # Hearts (13..25)
+    "hearts_01_ace", "hearts_02", "hearts_03", "hearts_04", "hearts_05",
+    "hearts_06", "hearts_07", "hearts_08", "hearts_09", "hearts_10",
+    "hearts_11_jack", "hearts_12_queen", "hearts_13_king",
+    # Clubs (26..38)
+    "clubs_01_ace", "clubs_02", "clubs_03", "clubs_04", "clubs_05",
+    "clubs_06", "clubs_07", "clubs_08", "clubs_09", "clubs_10",
+    "clubs_11_jack", "clubs_12_queen", "clubs_13_king",
+    # Diamonds (39..51)
+    "diamonds_01_ace", "diamonds_02", "diamonds_03", "diamonds_04", "diamonds_05",
+    "diamonds_06", "diamonds_07", "diamonds_08", "diamonds_09", "diamonds_10",
+    "diamonds_11_jack", "diamonds_12_queen", "diamonds_13_king",
+    # Jokers (52, 53)
+    "joker_black", "joker_red"
+]
+
+COURT_CARDS = [
+    "spades_11_jack", "spades_12_queen", "spades_13_king",
+    "hearts_11_jack", "hearts_12_queen", "hearts_13_king",
+    "clubs_11_jack", "clubs_12_queen", "clubs_13_king",
+    "diamonds_11_jack", "diamonds_12_queen", "diamonds_13_king"
+]
+
+def export_base(args):
+    svg_path = args.svg or "decks/classic_svg.svg"
+    bin_path = args.bin or "decks/classic_svg.bin"
+    out_dir = args.out or "assets/deck_cards/classic"
+    os.makedirs(out_dir, exist_ok=True)
+    png_dir = os.path.join(out_dir, "png")
+    svg_dir = os.path.join(out_dir, "svg")
+    os.makedirs(png_dir, exist_ok=True)
+    os.makedirs(svg_dir, exist_ok=True)
+
+    print(f"[SolEnshaded] Slicing base deck into standalone card assets in {out_dir}...")
+
+    # 1. Export high-res PNGs from binary cache if available
+    if os.path.exists(bin_path):
+        with open(bin_path, "rb") as fp:
+            header = fp.read(16)
+            magic, w, h, count = struct.unpack("<IIII", header)
+            if magic == 0x4344434B:
+                print(f"[SolEnshaded] Found binary cache: {w}x{h}, {count} textures.")
+                byte_count = w * h * 4
+                for i in range(count):
+                    raw_bytes = fp.read(byte_count)
+                    if len(raw_bytes) != byte_count:
+                        break
+                    img = Image.frombytes("RGBA", (w, h), raw_bytes)
+                    name = CARD_NAMES[i] if i < len(CARD_NAMES) else f"card_{i:02d}"
+                    png_file = os.path.join(png_dir, f"{name}.png")
+                    img.save(png_file, "PNG")
+                print(f"[SolEnshaded] Exported {count} reference PNGs to {png_dir}")
+
+    # 2. Extract standalone SVGs from master SVG
+    if os.path.exists(svg_path):
+        with open(svg_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        pattern = r'<g transform="matrix\(0\.24,0,0,0\.24,([^,]+),([^)]+)\)">(.*?)(?=<g transform="matrix\(0\.24|\Z)'
+        matches = re.findall(pattern, content, re.DOTALL)
+        print(f"[SolEnshaded] Found {len(matches)} card vector cells in master SVG.")
+
+        manifest = []
+        for idx, (x_str, y_str, card_body) in enumerate(matches):
+            name = CARD_NAMES[idx] if idx < len(CARD_NAMES) else f"card_{idx:02d}"
+            col = int(idx % 9)
+            row = int(idx // 9)
+
+            clean_body = card_body.strip()
+            if clean_body.endswith("</svg>"):
+                clean_body = clean_body[:-6].strip()
+
+            standalone_svg = (
+                f'<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
+                f'<svg width="750" height="1050" viewBox="0 0 750 1050" version="1.1" '
+                f'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
+                f'    <g transform="matrix(0.24,0,0,0.24,375,525)">\n'
+                f'        <!-- Standalone Card: {name} (Cell {idx}) -->\n'
+                f'        {clean_body}\n'
+                f'</svg>\n'
+            )
+
+            svg_file = os.path.join(svg_dir, f"{name}.svg")
+            with open(svg_file, "w", encoding="utf-8") as sf:
+                sf.write(standalone_svg)
+
+            manifest.append({
+                "index": idx,
+                "name": name,
+                "grid_col": col,
+                "grid_row": row,
+                "svg_file": f"svg/{name}.svg",
+                "png_file": f"png/{name}.png"
+            })
+
+        manifest_path = os.path.join(out_dir, "manifest.json")
+        with open(manifest_path, "w", encoding="utf-8") as mf:
+            json.dump(manifest, mf, indent=2)
+
+        print(f"[SolEnshaded] Exported {len(manifest)} standalone SVGs and manifest to {out_dir}")
+
+SUIT_SYMBOLS = {
+    "spades": "♠ spade",
+    "hearts": "♥ heart",
+    "clubs": "♣ club",
+    "diamonds": "♦ diamond"
+}
+
+RANK_LABELS = {
+    "01_ace": "A", "02": "2", "03": "3", "04": "4", "05": "5",
+    "06": "6", "07": "7", "08": "8", "09": "9", "10": "10",
+    "11_jack": "J", "12_queen": "Q", "13_king": "K"
+}
+
+def get_card_prompt(name, theme):
+    parts = name.split("_")
+    suit = parts[0]
+    rank_key = "_".join(parts[1:]) if len(parts) > 1 else parts[0]
+
+    rank_label = RANK_LABELS.get(rank_key, rank_key.upper())
+    suit_sym = SUIT_SYMBOLS.get(suit, suit)
+
+    if "king" in name:
+        subject = f"Monarch King of {suit.capitalize()} wearing noble royal {theme} attire, holding a ceremonial scepter, clockwork gears or arcane details"
+    elif "queen" in name:
+        subject = f"Queen of {suit.capitalize()} in noble royal {theme} gown, diadems, gears or sigils, intricate filigree"
+    elif "jack" in name:
+        subject = f"Young Jack knight or navigator of {suit.capitalize()} with {theme} gadgets, goggles or weapons, and ornate collar"
+    elif "ace" in name:
+        subject = f"Monumental central ornate {suit.capitalize()} ace crest with {theme} mechanical details, flourish and symmetry"
+    elif "joker" in name:
+        subject = f"Court jester / mechanist in wild {theme} attire juggling gears, steam valves or arcane sparks"
+    else:
+        subject = f"Standard playing card layout with {rank_label} of {suit.capitalize()} with {suit_sym} pips and vintage engraved {theme} accents"
+
+    indices_instruction = ""
+    if suit in SUIT_SYMBOLS:
+        indices_instruction = (
+            f"Corner indices: Bold, prominent rank '{rank_label}' and {suit_sym} pip in the top-left corner, "
+            f"and matching 180-degree inverted rank '{rank_label}' and {suit_sym} pip in the bottom-right corner. "
+        )
+
+    color_rule = ""
+    if suit in ("hearts", "diamonds"):
+        color_rule = (
+            f"VIVID RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
+            f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
+            f"and all primary suit symbols MUST be bright, vivid crimson red (#c8102e / #d01828). "
+            f"Do NOT make the symbols black, brown, brass, gold, or dark monochrome. "
+            f"The red must be unmistakable, bold, and high-contrast against the antique parchment. "
+        )
+    elif suit in ("spades", "clubs"):
+        color_rule = (
+            f"BLACK SUIT COLOR REQUIREMENT: This is a BLACK suit ({suit.capitalize()}). "
+            f"The corner rank '{rank_label}', corner {suit_sym} pip, and primary suit symbols MUST be deep solid charcoal-black (#111111). "
+            f"Accented with antique copper and brass metallic details. "
+        )
+
+    return (
+        f"A authentic standard playing card: {rank_label} of {suit.capitalize()} in {theme} style. "
+        f"Framing & Layout: Maintain standard playing card proportions (5:7 portrait aspect ratio) matching the reference card. "
+        f"{indices_instruction}"
+        f"{color_rule}"
+        f"Central artwork: {subject}. "
+        f"Art style: Crisp graphic woodblock engraving and copperplate linework, bold clean outlines, solid colors, "
+        f"on clean antique parchment cardstock background, no external drop shadows, edge-to-edge card layout."
+    )
+
+def generate_prompts(args):
+    theme = args.theme or "Victorian Steampunk"
+    out_file = args.out or f"assets/{theme.lower().replace(' ', '_')}_prompts.json"
+    os.makedirs(os.path.dirname(out_file), exist_ok=True)
+
+    print(f"[SolEnshaded] Generating Gemini prompt suite for '{theme}'...")
+    prompts = []
+    for idx, name in enumerate(CARD_NAMES):
+        prompt_text = get_card_prompt(name, theme)
+        prompt_entry = {
+            "index": idx,
+            "card_name": name,
+            "source_reference": f"png/{name}.png",
+            "gemini_prompt": prompt_text
+        }
+        prompts.append(prompt_entry)
+
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(prompts, f, indent=2)
+
+    print(f"[SolEnshaded] Generated {len(prompts)} prompts in {out_file}")
+
+def _generate_single_card(card_name, client, model_name, theme, png_dir, svg_dir, args, idx, total_cards):
+    png_out = os.path.join(png_dir, f"{card_name}.png")
+    svg_out = os.path.join(svg_dir, f"{card_name}.svg")
+
+    if os.path.exists(svg_out) and not getattr(args, "force", False):
+        print(f"[{idx+1}/{total_cards}] {card_name} already exists ({os.path.getsize(svg_out)} bytes), skipping.")
+        return True
+
+    prompt_text = get_card_prompt(card_name, theme)
+
+    # Load reference PNG if available for image-to-image conditioning
+    ref_png = os.path.join("assets/deck_cards/classic/png", f"{card_name}.png")
+    contents = []
+    if os.path.exists(ref_png):
+        try:
+            ref_img = Image.open(ref_png)
+            contents.append(ref_img)
+        except Exception as e:
+            print(f"  -> Note: could not load reference image {ref_png}: {e}")
+
+    style_ref_path = getattr(args, "style_ref", None)
+    if style_ref_path and os.path.exists(style_ref_path):
+        try:
+            style_img = Image.open(style_ref_path)
+            contents.append(style_img)
+            prompt_text = "Style Reference: Match the artistic style, line weight, and steampunk ornamentation of the second image (while strictly adhering to the suit color requirement below). " + prompt_text
+        except Exception as e:
+            print(f"  -> Note: could not load style reference image {style_ref_path}: {e}")
+
+    contents.append(prompt_text)
+
+    print(f"[{idx+1}/{total_cards}] Requesting: {card_name} ...")
+    try:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=contents
+        )
+
+        img_bytes = None
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.inline_data and part.inline_data.data:
+                    img_bytes = part.inline_data.data
+                    break
+
+        if img_bytes:
+            with open(png_out, "wb") as pf:
+                pf.write(img_bytes)
+            print(f"  -> Saved raw PNG for {card_name} ({len(img_bytes)} bytes)")
+
+            # Resize to standard 750x1050 card dimensions and quantize colors
+            raw_img = Image.open(png_out).convert("RGB")
+            resized_img = raw_img.resize((750, 1050), Image.Resampling.LANCZOS)
+            quantized = resized_img.quantize(colors=16, method=Image.Quantize.FASTOCTREE).convert("RGB")
+            proc_png = os.path.join(png_dir, f"{card_name}_proc.png")
+            quantized.save(proc_png, "PNG")
+
+            # Vectorize to clean SVG via vtracer
+            vtracer.convert_image_to_svg_py(
+                proc_png,
+                svg_out,
+                colormode="color",
+                filter_speckle=16,
+                corner_threshold=65,
+                length_threshold=6.0,
+                max_iterations=10,
+                splice_threshold=45
+            )
+            print(f"  -> Vectorized {card_name} SVG ({os.path.getsize(svg_out)} bytes)")
+            return True
+        else:
+            print(f"  -> No image data returned for {card_name}")
+            return False
+
+    except Exception as e:
+        print(f"  -> Error generating {card_name}: {e}")
+        return False
+
+def generate_ai_cards(args):
+    if not HAS_GENAI:
+        print("Error: 'google-genai' package is required. Install with: pip install google-genai")
+        sys.exit(1)
+    if not HAS_VTRACER:
+        print("Error: 'vtracer' package is required. Install with: pip install vtracer")
+        sys.exit(1)
+
+    api_key = args.api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        print("Error: No API key provided. Set GEMINI_API_KEY environment variable or pass --api-key.")
+        sys.exit(1)
+
+    client = genai.Client(api_key=api_key)
+    theme = args.theme or "Victorian Steampunk"
+    theme_slug = theme.lower().replace(" ", "_")
+    out_dir = args.out or f"assets/deck_cards/{theme_slug}"
+    png_dir = os.path.join(out_dir, "png")
+    svg_dir = os.path.join(out_dir, "svg")
+    os.makedirs(png_dir, exist_ok=True)
+    os.makedirs(svg_dir, exist_ok=True)
+
+    cards_to_gen = []
+    if args.cards == "all":
+        cards_to_gen = CARD_NAMES
+    elif args.cards == "court":
+        cards_to_gen = COURT_CARDS
+    elif args.cards == "aces":
+        cards_to_gen = [c for c in CARD_NAMES if "ace" in c]
+    elif args.cards == "red":
+        cards_to_gen = [c for c in CARD_NAMES if c.startswith("hearts_") or c.startswith("diamonds_")]
+    elif args.cards == "black":
+        cards_to_gen = [c for c in CARD_NAMES if c.startswith("spades_") or c.startswith("clubs_")]
+    elif args.cards in ("hearts", "diamonds", "spades", "clubs"):
+        cards_to_gen = [c for c in CARD_NAMES if c.startswith(f"{args.cards}_")]
+    else:
+        cards_to_gen = [c.strip() for c in args.cards.split(",") if c.strip() in CARD_NAMES]
+
+    model_name = args.model or "gemini-3-pro-image"
+    workers = getattr(args, "workers", 1) or 1
+    print(f"[SolEnshaded] Generating {len(cards_to_gen)} AI cards with Google GenAI ({model_name}, workers: {workers})...")
+    print(f"[SolEnshaded] Output: {out_dir}")
+
+    if workers > 1:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_generate_single_card, card_name, client, model_name, theme, png_dir, svg_dir, args, idx, len(cards_to_gen)): card_name
+                for idx, card_name in enumerate(cards_to_gen)
+            }
+            for future in concurrent.futures.as_completed(futures):
+                name = futures[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    print(f"  -> Exception in worker for {name}: {exc}")
+    else:
+        for idx, card_name in enumerate(cards_to_gen):
+            _generate_single_card(card_name, client, model_name, theme, png_dir, svg_dir, args, idx, len(cards_to_gen))
+            if idx + 1 < len(cards_to_gen):
+                time.sleep(args.delay)
+
+    print(f"[SolEnshaded] AI Generation & Vectorization completed in {out_dir}!")
+
+def assemble_deck(args):
+    cards_dir = args.cards_dir
+    out_svg = args.out or "decks/custom_assembled_svg.svg"
+    base_svg = getattr(args, "base", None) or "decks/classic_svg.svg"
+
+    print(f"[SolEnshaded] Assembling master 9x6 deck SVG from {cards_dir} -> {out_svg} (base: {base_svg})...")
+
+    if not os.path.exists(base_svg):
+        print(f"Error: Base SVG '{base_svg}' does not exist.")
+        sys.exit(1)
+
+    with open(base_svg, "r", encoding="utf-8") as f:
+        base_content = f.read()
+
+    pattern = r'<g\s+transform="matrix\(0\.24,0,0,0\.24,([0-9.]+),([0-9.]+)\)">'
+    matches = list(re.finditer(pattern, base_content))
+    if len(matches) != 54:
+        print(f"Error: Expected 54 card groups in base SVG '{base_svg}', found {len(matches)}")
+        sys.exit(1)
+
+    header = base_content[:matches[0].start()]
+    footer_start = base_content.rfind("</svg>")
+    footer = base_content[footer_start:]
+
+    assembled_cards = []
+    custom_count = 0
+
+    for i in range(54):
+        name = CARD_NAMES[i]
+        col = i % 9
+        row = i // 9
+        cell_x = col * 750
+        cell_y = row * 1050
+
+        # Candidate filenames in cards_dir
+        candidates = [f"{name}.svg"]
+        if i == 52:
+            candidates.extend(["joker.svg", "card_back.svg"])
+        elif i == 53:
+            candidates.extend(["joker_2.svg", "joker_red.svg"])
+
+        custom_card_path = None
+        for cand in candidates:
+            p = os.path.join(cards_dir, cand)
+            if os.path.exists(p):
+                custom_card_path = p
+                break
+
+        start = matches[i].start()
+        end = matches[i+1].start() if i+1 < len(matches) else footer_start
+
+        if custom_card_path:
+            with open(custom_card_path, "r", encoding="utf-8") as cf:
+                content = cf.read()
+            body_match = re.search(r'<svg[^>]*>(.*?)</svg>', content, re.DOTALL)
+            if body_match:
+                card_body = body_match.group(1).strip()
+            else:
+                card_body = content.strip()
+
+            custom_block = (
+                f'    <!-- Custom Card {i:02d}: {name} (Col {col}, Row {row}) -->\n'
+                f'    <g id="card_{name}" transform="translate({cell_x}, {cell_y})">\n'
+                f'        {card_body}\n'
+                f'    </g>\n'
+            )
+            assembled_cards.append(custom_block)
+            custom_count += 1
+            print(f"  [+] Replaced card {i:02d} ({name}) with {os.path.basename(custom_card_path)}")
+        else:
+            assembled_cards.append(base_content[start:end])
+
+    full_svg = header + "".join(assembled_cards) + footer
+    os.makedirs(os.path.dirname(out_svg), exist_ok=True)
+    with open(out_svg, "w", encoding="utf-8") as f:
+        f.write(full_svg)
+
+    # Invalidate stale binary cache so SolEnshaded will re-rasterize
+    bin_path = out_svg
+    if bin_path.endswith(".svg"):
+        bin_path = bin_path[:-4] + ".bin"
+    else:
+        bin_path += ".bin"
+
+    if os.path.exists(bin_path):
+        os.remove(bin_path)
+        print(f"[SolEnshaded] Removed stale binary cache: {bin_path}")
+
+    print(f"[SolEnshaded] Successfully assembled master SVG: {out_svg} ({custom_count}/54 custom cards, {os.path.getsize(out_svg)} bytes)")
+
+def assemble_bitmap_deck(args):
+    png_dir = args.cards_dir
+    out_png = args.out or "decks/steampunk.png"
+    target_w = getattr(args, "card_width", 360)
+    target_h = getattr(args, "card_height", 504)
+
+    cols = 9
+    rows = 6
+    sheet_w = cols * target_w
+    sheet_h = rows * target_h
+
+    print(f"[SolEnshaded] Assembling 9x6 master bitmap deck sheet ({sheet_w}x{sheet_h}) from {png_dir} -> {out_png}...")
+    master_img = Image.new("RGBA", (sheet_w, sheet_h), (255, 255, 255, 255))
+
+    pasted = 0
+    for idx, name in enumerate(CARD_NAMES):
+        col = idx % 9
+        row = idx // 9
+        x = col * target_w
+        y = row * target_h
+
+        card_path = os.path.join(png_dir, f"{name}.png")
+        if not os.path.exists(card_path):
+            if name == "joker_black":
+                card_path = os.path.join(png_dir, "joker.png")
+            elif name == "joker_red":
+                card_path = os.path.join(png_dir, "joker_2.png")
+
+        if os.path.exists(card_path):
+            card_img = Image.open(card_path).convert("RGBA")
+            if card_img.size != (target_w, target_h):
+                card_img = card_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            master_img.paste(card_img, (x, y))
+            pasted += 1
+        else:
+            print(f"  Warning: missing PNG for card {idx:02d} ({name})")
+
+    os.makedirs(os.path.dirname(out_png), exist_ok=True)
+    master_img.save(out_png, "PNG", optimize=True)
+    file_size_mb = os.path.getsize(out_png) / (1024 * 1024)
+    print(f"[SolEnshaded] Successfully assembled bitmap deck: {out_png} ({pasted}/54 cards, {file_size_mb:.2f} MB)")
+
+    # Invalidate binary cache if present
+    bin_path = out_png
+    dot_pos = bin_path.rfind('.')
+    if dot_pos != -1:
+        bin_path = bin_path[:dot_pos] + ".bin"
+    else:
+        bin_path += ".bin"
+
+    if os.path.exists(bin_path):
+        os.remove(bin_path)
+        print(f"[SolEnshaded] Removed stale binary cache: {bin_path}")
+
+def auto_deck(args):
+    theme_slug = args.theme.lower().replace(" ", "_")
+    cards_out = os.path.join("assets/deck_cards", theme_slug)
+    master_svg_out = args.out or f"decks/{theme_slug}_svg.svg"
+
+    # Step 1: Generate AI cards & vectorize
+    args.out = cards_out
+    generate_ai_cards(args)
+
+    # Step 2: Assemble master 9x6 SVG
+    class AsmArgs:
+        cards_dir = os.path.join(cards_out, "svg")
+        out = master_svg_out
+        base = getattr(args, "base", "decks/classic_svg.svg")
+
+    assemble_deck(AsmArgs())
+    print(f"[SolEnshaded] Full automated deck generation complete: {master_svg_out}")
+
+def main():
+    parser = argparse.ArgumentParser(description="SolEnshaded Complete Deck Asset & Pipeline Tool")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # export-base
+    p_export = subparsers.add_parser("export-base", help="Slice base deck into 54 standalone SVGs and PNGs")
+    p_export.add_argument("--svg", default="decks/classic_svg.svg", help="Path to master classic SVG")
+    p_export.add_argument("--bin", default="decks/classic_svg.bin", help="Path to binary cache")
+    p_export.add_argument("--out", default="assets/deck_cards/classic", help="Output directory")
+
+    # generate-prompts
+    p_prompt = subparsers.add_parser("generate-prompts", help="Generate Gemini prompts for custom cards")
+    p_prompt.add_argument("--theme", default="Victorian Steampunk", help="Theme name")
+    p_prompt.add_argument("--out", default=None, help="Output JSON path")
+
+    # generate-ai
+    p_ai = subparsers.add_parser("generate-ai", help="Generate AI card artwork via Google GenAI + vtracer")
+    p_ai.add_argument("--theme", default="Victorian Steampunk", help="Theme name")
+    p_ai.add_argument("--cards", default="court", help="'all', 'court', 'aces', or comma-separated card names")
+    p_ai.add_argument("--api-key", default=None, help="Google Gemini API Key")
+    p_ai.add_argument("--model", default="gemini-3-pro-image", help="GenAI model ID (e.g. gemini-3-pro-image, gemini-3.1-flash-image)")
+    p_ai.add_argument("--delay", type=float, default=2.0, help="Delay in seconds between requests")
+    p_ai.add_argument("--workers", type=int, default=1, help="Concurrent worker threads for generation (e.g. 2-4)")
+    p_ai.add_argument("--style-ref", default=None, help="Optional style reference image path (for multi-image style transfer)")
+    p_ai.add_argument("--force", action="store_true", help="Force overwrite of existing card SVGs")
+    p_ai.add_argument("--out", default=None, help="Output card assets directory")
+
+    # assemble
+    p_asm = subparsers.add_parser("assemble", help="Assemble 54 standalone SVGs into master 9x6 SVG")
+    p_asm.add_argument("--cards-dir", required=True, help="Directory containing individual card .svg files")
+    p_asm.add_argument("--base", default="decks/classic_svg.svg", help="Path to base template master SVG (e.g. classic, hardwood, eldritch)")
+    p_asm.add_argument("--out", default="decks/custom_svg.svg", help="Output master SVG path")
+
+    # assemble-bitmap
+    p_asm_bmp = subparsers.add_parser("assemble-bitmap", help="Assemble 54 standalone PNGs into master 9x6 PNG sheet")
+    p_asm_bmp.add_argument("--cards-dir", required=True, help="Directory containing individual card .png files")
+    p_asm_bmp.add_argument("--out", default="decks/steampunk.png", help="Output master PNG path")
+    p_asm_bmp.add_argument("--card-width", type=int, default=360, help="Per-card width in pixels (default 360)")
+    p_asm_bmp.add_argument("--card-height", type=int, default=504, help="Per-card height in pixels (default 504)")
+
+    # package-eats
+    p_pkg = subparsers.add_parser("package-eats", help="Package SVG/PNG deck into compressed .eats deck recipe")
+    p_pkg.add_argument("--input", required=True, help="Input SVG or PNG file path")
+    p_pkg.add_argument("--out", required=True, help="Output .eats file path")
+    p_pkg.add_argument("--name", default="Custom Deck", help="Deck display name")
+    p_pkg.add_argument("--theme-id", default="custom", help="Theme ID identifier")
+
+    # auto-deck (all in one)
+    p_auto = subparsers.add_parser("auto-deck", help="End-to-end: GenAI cards -> vectorize -> assemble")
+    p_auto.add_argument("--theme", default="Victorian Steampunk", help="Theme name")
+    p_auto.add_argument("--cards", default="court", help="'all', 'court', 'aces', or comma-separated card names")
+    p_auto.add_argument("--api-key", default=None, help="Google Gemini API Key")
+    p_auto.add_argument("--model", default="gemini-3-pro-image", help="GenAI model ID (e.g. gemini-3-pro-image, gemini-3.1-flash-image)")
+    p_auto.add_argument("--delay", type=float, default=2.0, help="Delay in seconds between requests")
+    p_auto.add_argument("--workers", type=int, default=1, help="Concurrent worker threads for generation (e.g. 2-4)")
+    p_auto.add_argument("--style-ref", default=None, help="Optional style reference image path (for multi-image style transfer)")
+    p_auto.add_argument("--base", default="decks/classic_svg.svg", help="Path to base template master SVG")
+    p_auto.add_argument("--out", default=None, help="Output master SVG path")
+
+    args = parser.parse_args()
+    if args.command == "export-base":
+        export_base(args)
+    elif args.command == "generate-prompts":
+        generate_prompts(args)
+    elif args.command == "generate-ai":
+        generate_ai_cards(args)
+    elif args.command == "assemble":
+        assemble_deck(args)
+    elif args.command == "assemble-bitmap":
+        assemble_bitmap_deck(args)
+    elif args.command == "package-eats":
+        import zlib, base64
+        in_path = args.input
+        out_path = args.out
+        with open(in_path, "rb") as f:
+            data = f.read()
+        if in_path.endswith(".svg"):
+            comp = zlib.compress(data, level=9)
+            b64 = base64.b64encode(comp).decode("ascii")
+            fmt = "svgz"
+            desc = "Lossless Deflate-compressed SVG vector master sheet."
+        else:
+            b64 = base64.b64encode(data).decode("ascii")
+            fmt = "png"
+            desc = "High-resolution raster master sheet embedded in Eatscript."
+        content = f'''# SolEnshaded Deck Recipe — {args.name}
+name        = "{args.name}"
+theme_id    = "{args.theme_id}"
+format      = "{fmt}"
+card_w      = 360
+card_h      = 504
+author      = "SolEnshaded"
+description = "{desc}"
+
+deck_blob = """{b64}"""
+'''
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"[SolEnshaded] Packaged {in_path} ({len(data):,} bytes) -> {out_path} ({os.path.getsize(out_path):,} bytes)")
+    elif args.command == "auto-deck":
+        auto_deck(args)
+
+if __name__ == "__main__":
+    main()

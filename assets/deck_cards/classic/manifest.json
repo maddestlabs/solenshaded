@@ -1,0 +1,434 @@
+[
+  {
+    "index": 0,
+    "name": "spades_01_ace",
+    "grid_col": 0,
+    "grid_row": 0,
+    "svg_file": "svg/spades_01_ace.svg",
+    "png_file": "png/spades_01_ace.png"
+  },
+  {
+    "index": 1,
+    "name": "spades_02",
+    "grid_col": 1,
+    "grid_row": 0,
+    "svg_file": "svg/spades_02.svg",
+    "png_file": "png/spades_02.png"
+  },
+  {
+    "index": 2,
+    "name": "spades_03",
+    "grid_col": 2,
+    "grid_row": 0,
+    "svg_file": "svg/spades_03.svg",
+    "png_file": "png/spades_03.png"
+  },
+  {
+    "index": 3,
+    "name": "spades_04",
+    "grid_col": 3,
+    "grid_row": 0,
+    "svg_file": "svg/spades_04.svg",
+    "png_file": "png/spades_04.png"
+  },
+  {
+    "index": 4,
+    "name": "spades_05",
+    "grid_col": 4,
+    "grid_row": 0,
+    "svg_file": "svg/spades_05.svg",
+    "png_file": "png/spades_05.png"
+  },
+  {
+    "index": 5,
+    "name": "spades_06",
+    "grid_col": 5,
+    "grid_row": 0,
+    "svg_file": "svg/spades_06.svg",
+    "png_file": "png/spades_06.png"
+  },
+  {
+    "index": 6,
+    "name": "spades_07",
+    "grid_col": 6,
+    "grid_row": 0,
+    "svg_file": "svg/spades_07.svg",
+    "png_file": "png/spades_07.png"
+  },
+  {
+    "index": 7,
+    "name": "spades_08",
+    "grid_col": 7,
+    "grid_row": 0,
+    "svg_file": "svg/spades_08.svg",
+    "png_file": "png/spades_08.png"
+  },
+  {
+    "index": 8,
+    "name": "spades_09",
+    "grid_col": 8,
+    "grid_row": 0,
+    "svg_file": "svg/spades_09.svg",
+    "png_file": "png/spades_09.png"
+  },
+  {
+    "index": 9,
+    "name": "spades_10",
+    "grid_col": 0,
+    "grid_row": 1,
+    "svg_file": "svg/spades_10.svg",
+    "png_file": "png/spades_10.png"
+  },
+  {
+    "index": 10,
+    "name": "spades_11_jack",
+    "grid_col": 1,
+    "grid_row": 1,
+    "svg_file": "svg/spades_11_jack.svg",
+    "png_file": "png/spades_11_jack.png"
+  },
+  {
+    "index": 11,
+    "name": "spades_12_queen",
+    "grid_col": 2,
+    "grid_row": 1,
+    "svg_file": "svg/spades_12_queen.svg",
+    "png_file": "png/spades_12_queen.png"
+  },
+  {
+    "index": 12,
+    "name": "spades_13_king",
+    "grid_col": 3,
+    "grid_row": 1,
+    "svg_file": "svg/spades_13_king.svg",
+    "png_file": "png/spades_13_king.png"
+  },
+  {
+    "index": 13,
+    "name": "hearts_01_ace",
+    "grid_col": 4,
+    "grid_row": 1,
+    "svg_file": "svg/hearts_01_ace.svg",
+    "png_file": "png/hearts_01_ace.png"
+  },
+  {
+    "index": 14,
+    "name": "hearts_02",
+    "grid_col": 5,
+    "grid_row": 1,
+    "svg_file": "svg/hearts_02.svg",
+    "png_file": "png/hearts_02.png"
+  },
+  {
+    "index": 15,
+    "name": "hearts_03",
+    "grid_col": 6,
+    "grid_row": 1,
+    "svg_file": "svg/hearts_03.svg",
+    "png_file": "png/hearts_03.png"
+  },
+  {
+    "index": 16,
+    "name": "hearts_04",
+    "grid_col": 7,
+    "grid_row": 1,
+    "svg_file": "svg/hearts_04.svg",
+    "png_file": "png/hearts_04.png"
+  },
+  {
+    "index": 17,
+    "name": "hearts_05",
+    "grid_col": 8,
+    "grid_row": 1,
+    "svg_file": "svg/hearts_05.svg",
+    "png_file": "png/hearts_05.png"
+  },
+  {
+    "index": 18,
+    "name": "hearts_06",
+    "grid_col": 0,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_06.svg",
+    "png_file": "png/hearts_06.png"
+  },
+  {
+    "index": 19,
+    "name": "hearts_07",
+    "grid_col": 1,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_07.svg",
+    "png_file": "png/hearts_07.png"
+  },
+  {
+    "index": 20,
+    "name": "hearts_08",
+    "grid_col": 2,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_08.svg",
+    "png_file": "png/hearts_08.png"
+  },
+  {
+    "index": 21,
+    "name": "hearts_09",
+    "grid_col": 3,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_09.svg",
+    "png_file": "png/hearts_09.png"
+  },
+  {
+    "index": 22,
+    "name": "hearts_10",
+    "grid_col": 4,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_10.svg",
+    "png_file": "png/hearts_10.png"
+  },
+  {
+    "index": 23,
+    "name": "hearts_11_jack",
+    "grid_col": 5,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_11_jack.svg",
+    "png_file": "png/hearts_11_jack.png"
+  },
+  {
+    "index": 24,
+    "name": "hearts_12_queen",
+    "grid_col": 6,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_12_queen.svg",
+    "png_file": "png/hearts_12_queen.png"
+  },
+  {
+    "index": 25,
+    "name": "hearts_13_king",
+    "grid_col": 7,
+    "grid_row": 2,
+    "svg_file": "svg/hearts_13_king.svg",
+    "png_file": "png/hearts_13_king.png"
+  },
+  {
+    "index": 26,
+    "name": "clubs_01_ace",
+    "grid_col": 8,
+    "grid_row": 2,
+    "svg_file": "svg/clubs_01_ace.svg",
+    "png_file": "png/clubs_01_ace.png"
+  },
+  {
+    "index": 27,
+    "name": "clubs_02",
+    "grid_col": 0,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_02.svg",
+    "png_file": "png/clubs_02.png"
+  },
+  {
+    "index": 28,
+    "name": "clubs_03",
+    "grid_col": 1,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_03.svg",
+    "png_file": "png/clubs_03.png"
+  },
+  {
+    "index": 29,
+    "name": "clubs_04",
+    "grid_col": 2,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_04.svg",
+    "png_file": "png/clubs_04.png"
+  },
+  {
+    "index": 30,
+    "name": "clubs_05",
+    "grid_col": 3,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_05.svg",
+    "png_file": "png/clubs_05.png"
+  },
+  {
+    "index": 31,
+    "name": "clubs_06",
+    "grid_col": 4,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_06.svg",
+    "png_file": "png/clubs_06.png"
+  },
+  {
+    "index": 32,
+    "name": "clubs_07",
+    "grid_col": 5,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_07.svg",
+    "png_file": "png/clubs_07.png"
+  },
+  {
+    "index": 33,
+    "name": "clubs_08",
+    "grid_col": 6,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_08.svg",
+    "png_file": "png/clubs_08.png"
+  },
+  {
+    "index": 34,
+    "name": "clubs_09",
+    "grid_col": 7,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_09.svg",
+    "png_file": "png/clubs_09.png"
+  },
+  {
+    "index": 35,
+    "name": "clubs_10",
+    "grid_col": 8,
+    "grid_row": 3,
+    "svg_file": "svg/clubs_10.svg",
+    "png_file": "png/clubs_10.png"
+  },
+  {
+    "index": 36,
+    "name": "clubs_11_jack",
+    "grid_col": 0,
+    "grid_row": 4,
+    "svg_file": "svg/clubs_11_jack.svg",
+    "png_file": "png/clubs_11_jack.png"
+  },
+  {
+    "index": 37,
+    "name": "clubs_12_queen",
+    "grid_col": 1,
+    "grid_row": 4,
+    "svg_file": "svg/clubs_12_queen.svg",
+    "png_file": "png/clubs_12_queen.png"
+  },
+  {
+    "index": 38,
+    "name": "clubs_13_king",
+    "grid_col": 2,
+    "grid_row": 4,
+    "svg_file": "svg/clubs_13_king.svg",
+    "png_file": "png/clubs_13_king.png"
+  },
+  {
+    "index": 39,
+    "name": "diamonds_01_ace",
+    "grid_col": 3,
+    "grid_row": 4,
+    "svg_file": "svg/diamonds_01_ace.svg",
+    "png_file": "png/diamonds_01_ace.png"
+  },
+  {
+    "index": 40,
+    "name": "diamonds_02",
+    "grid_col": 4,
+    "grid_row": 4,
+    "svg_file": "svg/diamonds_02.svg",
+    "png_file": "png/diamonds_02.png"
+  },
+  {
+    "index": 41,
+    "name": "diamonds_03",
+    "grid_col": 5,
+    "grid_row": 4,
+    "svg_file": "svg/diamonds_03.svg",
+    "png_file": "png/diamonds_03.png"
+  },
+  {
+    "index": 42,
+    "name": "diamonds_04",
+    "grid_col": 6,
+    "grid_row": 4,
+    "svg_file": "svg/diamonds_04.svg",
+    "png_file": "png/diamonds_04.png"
+  },
+  {
+    "index": 43,
+    "name": "diamonds_05",
+    "grid_col": 7,
+    "grid_row": 4,
+    "svg_file": "svg/diamonds_05.svg",
+    "png_file": "png/diamonds_05.png"
+  },
+  {
+    "index": 44,
+    "name": "diamonds_06",
+    "grid_col": 8,
+    "grid_row": 4,
+    "svg_file": "svg/diamonds_06.svg",
+    "png_file": "png/diamonds_06.png"
+  },
+  {
+    "index": 45,
+    "name": "diamonds_07",
+    "grid_col": 0,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_07.svg",
+    "png_file": "png/diamonds_07.png"
+  },
+  {
+    "index": 46,
+    "name": "diamonds_08",
+    "grid_col": 1,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_08.svg",
+    "png_file": "png/diamonds_08.png"
+  },
+  {
+    "index": 47,
+    "name": "diamonds_09",
+    "grid_col": 2,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_09.svg",
+    "png_file": "png/diamonds_09.png"
+  },
+  {
+    "index": 48,
+    "name": "diamonds_10",
+    "grid_col": 3,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_10.svg",
+    "png_file": "png/diamonds_10.png"
+  },
+  {
+    "index": 49,
+    "name": "diamonds_11_jack",
+    "grid_col": 4,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_11_jack.svg",
+    "png_file": "png/diamonds_11_jack.png"
+  },
+  {
+    "index": 50,
+    "name": "diamonds_12_queen",
+    "grid_col": 5,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_12_queen.svg",
+    "png_file": "png/diamonds_12_queen.png"
+  },
+  {
+    "index": 51,
+    "name": "diamonds_13_king",
+    "grid_col": 6,
+    "grid_row": 5,
+    "svg_file": "svg/diamonds_13_king.svg",
+    "png_file": "png/diamonds_13_king.png"
+  },
+  {
+    "index": 52,
+    "name": "joker_black",
+    "grid_col": 7,
+    "grid_row": 5,
+    "svg_file": "svg/joker_black.svg",
+    "png_file": "png/joker_black.png"
+  },
+  {
+    "index": 53,
+    "name": "joker_red",
+    "grid_col": 8,
+    "grid_row": 5,
+    "svg_file": "svg/joker_red.svg",
+    "png_file": "png/joker_red.png"
+  }
+]
