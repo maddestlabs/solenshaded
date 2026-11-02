@@ -1,6 +1,6 @@
 # Solitaire Enshaded (`SolEnshaded`)
 
-> **A 100% Procedural, Zero-Bloat Tribute to *Hardwood Solitaire 3.0* Set in the World of *Eatscharted***  
+> **A 100% Procedural, Zero-Bloat Tribute to *Hardwood Solitaire* Set in the World of *Encharted***  
 > *Built in pure C++20 & WebGPU on the [Eatsbits](file:///c:/git/eatsbits/engine-blueprint.md) Engine Foundation.*
 
 ---
@@ -12,7 +12,6 @@
 In the world of Eatscharted, **Shades**—incorporeal remnants inspired by *ZAngband's* **Spectre** class—pass through the veil between the living kingdoms and the Sunken Sanctums, playing **"The Veil's Patience"** on carved hardwood and obsidian tables.
 
 ### Key Features
-- **Zero Bitmap Bloat, 100% Procedural Rendering:** Carved hardwood table borders, woven baize felt, warm overhead oil-lamp vignettes, parchment card faces, vector suit pips, and ornate geometric card backs synthesized directly via [`BatchRenderer2D`](file:///c:/git/solenshaded/include/eatsbits/ui/batch_renderer_2d.hpp) and [`SvgPath`](file:///c:/git/solenshaded/include/eatsbits/ui/svg_path.hpp).
 - **Authentic Hardwood Solitaire 3.0 Ergonomics:**
   - **One-Tap / Right-Click Smart Moves:** Automatically routes any playable card or sub-stack to its optimal Foundation or Tableau destination.
   - **Spring-Damper Card Flight & Elevation Shadows:** Airborne cards arc smoothly across the board with dynamic 2D drop-shadow elevation.

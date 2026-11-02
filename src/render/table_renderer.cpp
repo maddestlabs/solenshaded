@@ -1510,6 +1510,7 @@ struct InteractiveContext {
         double cssW = 0.0, cssH = 0.0;
         emscripten_get_element_css_size("#canvas", &cssW, &cssH);
         double dpr = emscripten_get_device_pixel_ratio();
+        if (dpr <= 0.0) dpr = 1.0;
         int winW = static_cast<int>(cssW * dpr);
         int winH = static_cast<int>(cssH * dpr);
         if (winW > 0 && winH > 0 && (static_cast<uint32_t>(winW) != width || static_cast<uint32_t>(winH) != height)) {
@@ -1532,13 +1533,8 @@ struct InteractiveContext {
 
         double mx = 0.0, my = 0.0;
         glfwGetCursorPos(window, &mx, &my);
-#if defined(__EMSCRIPTEN__)
-        const float fmx = static_cast<float>(mx * dpr);
-        const float fmy = static_cast<float>(my * dpr);
-#else
         const float fmx = static_cast<float>(mx);
         const float fmy = static_cast<float>(my);
-#endif
 
         int hoveredBtn = hitTestHudButtons(fmx, fmy, static_cast<float>(width), static_cast<float>(height), board, renderer.getAntiAliasingMode());
 
