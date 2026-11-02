@@ -3185,6 +3185,8 @@ BatchRenderer2D::~BatchRenderer2D() {
 }
 
 bool BatchRenderer2D::initialize(void* windowHandle, uint32_t width, uint32_t height, RenderBackendType backend) {
+    physicalWidth_ = width;
+    physicalHeight_ = height;
     currentWidth_ = static_cast<float>(width);
     currentHeight_ = static_cast<float>(height);
 

@@ -1396,6 +1396,11 @@ struct InteractiveContext {
     GLFWwindow* window = nullptr;
     uint32_t width = 1280;
     uint32_t height = 720;
+#if defined(__EMSCRIPTEN__)
+    uint32_t fbWidth = 1280;
+    uint32_t fbHeight = 720;
+    float currentDpr = 1.0f;
+#endif
 
     int draggedPile = -1;
     int draggedCardIdx = -1;
@@ -1507,17 +1512,57 @@ struct InteractiveContext {
         lastTime = now;
 
 #if defined(__EMSCRIPTEN__)
-        double cssW = 0.0, cssH = 0.0;
-        emscripten_get_element_css_size("#canvas", &cssW, &cssH);
-        double dpr = emscripten_get_device_pixel_ratio();
+        double cssW = EM_ASM_DOUBLE({
+            var container = document.getElementById('canvas-container');
+            return (container && container.clientWidth > 0) ? container.clientWidth : (window.innerWidth || 1280);
+        });
+        double cssH = EM_ASM_DOUBLE({
+            var container = document.getElementById('canvas-container');
+            return (container && container.clientHeight > 0) ? container.clientHeight : (window.innerHeight || 720);
+        });
+        double dpr = EM_ASM_DOUBLE({
+            return window.devicePixelRatio || 1.0;
+        });
         if (dpr <= 0.0) dpr = 1.0;
-        int winW = static_cast<int>(cssW * dpr);
-        int winH = static_cast<int>(cssH * dpr);
-        if (winW > 0 && winH > 0 && (static_cast<uint32_t>(winW) != width || static_cast<uint32_t>(winH) != height)) {
-            emscripten_set_canvas_element_size("#canvas", winW, winH);
-            width = static_cast<uint32_t>(winW);
-            height = static_cast<uint32_t>(winH);
-            renderer.resize(width, height);
+
+        int targetW = static_cast<int>(std::round(cssW));
+        int targetH = static_cast<int>(std::round(cssH));
+        if (targetW < 320) targetW = 320;
+        if (targetH < 240) targetH = 240;
+
+        int targetFbW = static_cast<int>(std::round(static_cast<float>(targetW) * static_cast<float>(dpr)));
+        int targetFbH = static_cast<int>(std::round(static_cast<float>(targetH) * static_cast<float>(dpr)));
+
+        if (static_cast<uint32_t>(targetW) != width ||
+            static_cast<uint32_t>(targetH) != height ||
+            static_cast<uint32_t>(targetFbW) != fbWidth ||
+            static_cast<uint32_t>(targetFbH) != fbHeight ||
+            std::abs(currentDpr - static_cast<float>(dpr)) > 0.001f) {
+
+            width = static_cast<uint32_t>(targetW);
+            height = static_cast<uint32_t>(targetH);
+            fbWidth = static_cast<uint32_t>(targetFbW);
+            fbHeight = static_cast<uint32_t>(targetFbH);
+            currentDpr = static_cast<float>(dpr);
+
+            EM_ASM({
+                var canvas = document.getElementById('canvas');
+                if (canvas) {
+                    canvas.width = $0;
+                    canvas.height = $1;
+                    canvas.style.width = $2 + 'px';
+                    canvas.style.height = $3 + 'px';
+                }
+                if (typeof GLFW !== 'undefined' && GLFW.active) {
+                    GLFW.active.width = $2;
+                    GLFW.active.height = $3;
+                    GLFW.active.framebufferWidth = $0;
+                    GLFW.active.framebufferHeight = $1;
+                }
+            }, fbWidth, fbHeight, width, height);
+
+            renderer.setRenderScale(currentDpr, currentDpr);
+            renderer.resize(fbWidth, fbHeight);
             board.computeLayout(static_cast<float>(width), static_cast<float>(height));
         }
 #else
@@ -1676,6 +1721,27 @@ int TableRenderer::runInteractiveWindow(
     uint32_t height,
     int initialAaMode
 ) {
+#if defined(__EMSCRIPTEN__)
+    double initCssW = EM_ASM_DOUBLE({
+        var container = document.getElementById('canvas-container');
+        return (container && container.clientWidth > 0) ? container.clientWidth : (window.innerWidth || 1280);
+    });
+    double initCssH = EM_ASM_DOUBLE({
+        var container = document.getElementById('canvas-container');
+        return (container && container.clientHeight > 0) ? container.clientHeight : (window.innerHeight || 720);
+    });
+    double initDpr = EM_ASM_DOUBLE({
+        return window.devicePixelRatio || 1.0;
+    });
+    if (initDpr <= 0.0) initDpr = 1.0;
+    if (initCssW > 0.0 && initCssH > 0.0) {
+        width = static_cast<uint32_t>(std::round(initCssW));
+        height = static_cast<uint32_t>(std::round(initCssH));
+    }
+    uint32_t initFbW = static_cast<uint32_t>(std::round(static_cast<float>(width) * static_cast<float>(initDpr)));
+    uint32_t initFbH = static_cast<uint32_t>(std::round(static_cast<float>(height) * static_cast<float>(initDpr)));
+#endif
+
     if (!glfwInit()) {
         std::cerr << "[SolEnshaded] Failed to initialize GLFW windowing.\n";
         return 1;
@@ -1695,9 +1761,33 @@ int TableRenderer::runInteractiveWindow(
         return 1;
     }
 
+#if defined(__EMSCRIPTEN__)
+    EM_ASM({
+        var canvas = document.getElementById('canvas');
+        if (canvas) {
+            canvas.width = $0;
+            canvas.height = $1;
+            canvas.style.width = $2 + 'px';
+            canvas.style.height = $3 + 'px';
+        }
+        if (typeof GLFW !== 'undefined' && GLFW.active) {
+            GLFW.active.width = $2;
+            GLFW.active.height = $3;
+            GLFW.active.framebufferWidth = $0;
+            GLFW.active.framebufferHeight = $1;
+        }
+    }, initFbW, initFbH, width, height);
+#endif
+
     s_activeContext = std::make_unique<InteractiveContext>(board, foley, width, height);
     InteractiveContext& ctx = *s_activeContext;
     ctx.window = window;
+#if defined(__EMSCRIPTEN__)
+    ctx.fbWidth = initFbW;
+    ctx.fbHeight = initFbH;
+    ctx.currentDpr = static_cast<float>(initDpr);
+    ctx.renderer.setRenderScale(ctx.currentDpr, ctx.currentDpr);
+#endif
 
 #if defined(_WIN32) && !defined(__EMSCRIPTEN__)
     HWND hwnd = glfwGetWin32Window(window);
@@ -1706,7 +1796,11 @@ int TableRenderer::runInteractiveWindow(
     void* nativeHandle = static_cast<void*>(window);
 #endif
 
+#if defined(__EMSCRIPTEN__)
+    if (!ctx.renderer.initialize(nativeHandle, initFbW, initFbH, eatsbits::ui::RenderBackendType::WebGPU)) {
+#else
     if (!ctx.renderer.initialize(nativeHandle, width, height, eatsbits::ui::RenderBackendType::WebGPU)) {
+#endif
         std::cerr << "[SolEnshaded] Failed to initialize 2D batch renderer.\n";
         glfwDestroyWindow(window);
         glfwTerminate();
