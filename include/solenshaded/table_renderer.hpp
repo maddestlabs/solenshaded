@@ -55,6 +55,11 @@ public:
     );
 };
 
+/**
+ * Load a card deck (.eats, .png, .svg) or custom table theme (.eats) into the active interactive session.
+ */
+bool loadFile(const std::string& filePath);
+
 } // namespace solenshaded
 
 #endif // SOLENSHADED_TABLE_RENDERER_HPP

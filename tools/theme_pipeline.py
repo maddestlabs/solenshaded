@@ -271,25 +271,26 @@ def pack_theme(
     )
 
     # Construct Eatscript Header
-    recipe_header = f"""# SolEnshaded Background Theme Package - {display_name}
+    recipe_header = f"""# SolEnshaded Background Theme Package — {display_name}
 # Channel-Packed PBR Surface with Tangent Normal Relief and Specular Sheen
 
-theme_name         = "{display_name}"
-material_id        = "{material_id}"
-format             = "pbr_orm"
-version            = 1
-author             = "{author}"
-description        = "{desc}"
+sol.set_theme({{
+    id: "{material_id}",
+    name: "{display_name}",
+    author: "{author}",
+    description: "{desc}",
+    version: 1
+}})
 
-# Physical Shading Parameters
-uv_scale           = {uv_scale:.2f}
-normal_strength    = {normal_strength:.2f}
-specular_intensity = {specular_intensity:.2f}
-ambient_level      = {ambient_level:.2f}
-diffuse_level      = {diffuse_level:.2f}
-tint_r             = {tint_r:.2f}
-tint_g             = {tint_g:.2f}
-tint_b             = {tint_b:.2f}
+sol.set_background(blob = "", {{
+    format: "ebkg",
+    uv_scale: {uv_scale:.2f},
+    normal_strength: {normal_strength:.2f},
+    specular_intensity: {specular_intensity:.2f},
+    ambient_level: {ambient_level:.2f},
+    diffuse_level: {diffuse_level:.2f},
+    tint: [{tint_r:.2f}, {tint_g:.2f}, {tint_b:.2f}]
+}})
 
 __BLOB__
 """

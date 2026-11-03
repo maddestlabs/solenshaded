@@ -653,6 +653,56 @@
             }
         };
 
+        window.loadAnimeDeck = async function() {
+            // Check if anime.eats is already present in MEMFS
+            if (typeof FS !== 'undefined') {
+                let exists = false;
+                try {
+                    const stat = FS.stat('/decks/anime.eats');
+                    if (stat && stat.size > 0) exists = true;
+                } catch (e) {}
+
+                if (exists && typeof Module !== 'undefined' && Module.ccall) {
+                    const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], ['/decks/anime.eats']);
+                    if (ok) {
+                        showToast('Activated Anime Celestia Deck.');
+                        return;
+                    }
+                }
+            }
+
+            // Otherwise, stream download from static ./decks/anime.eats
+            const success = await loadEatsFromUrl('./decks/anime.eats', 'anime.eats');
+            if (success) {
+                showToast('Activated Anime Celestia Deck.');
+            }
+        };
+
+        window.loadCyberpunkDeck = async function() {
+            // Check if cyberpunk.eats is already present in MEMFS
+            if (typeof FS !== 'undefined') {
+                let exists = false;
+                try {
+                    const stat = FS.stat('/decks/cyberpunk.eats');
+                    if (stat && stat.size > 0) exists = true;
+                } catch (e) {}
+
+                if (exists && typeof Module !== 'undefined' && Module.ccall) {
+                    const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], ['/decks/cyberpunk.eats']);
+                    if (ok) {
+                        showToast('Activated Cyberpunk Neon Deck.');
+                        return;
+                    }
+                }
+            }
+
+            // Otherwise, stream download from static ./decks/cyberpunk.eats
+            const success = await loadEatsFromUrl('./decks/cyberpunk.eats', 'cyberpunk.eats');
+            if (success) {
+                showToast('Activated Cyberpunk Neon Deck.');
+            }
+        };
+
         function setupWebControls() {
             const btnSteampunk = document.getElementById('btn-load-steampunk');
             if (btnSteampunk) {

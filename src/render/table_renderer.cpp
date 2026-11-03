@@ -2,6 +2,8 @@
 #include "solenshaded/card_texture_cache.hpp"
 #include "solenshaded/procedural_background.hpp"
 #include "eatsbits/ui/glyph/vector_font.hpp"
+#include "eatsbits/eatscript/evaluator.hpp"
+#include "eatsbits/ui/base64.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -64,6 +66,9 @@ static const char* deckThemeButtonLabel(DeckThemeId theme) noexcept {
     switch (theme) {
         case DeckThemeId::ClassicSvg:  return "DECK: CLASSIC [D]";
         case DeckThemeId::SteampunkAi: return "DECK: STEAMPUNK [D]";
+        case DeckThemeId::Anime:       return "DECK: ANIME [D]";
+        case DeckThemeId::Cyberpunk:   return "DECK: CYBERPUNK [D]";
+        case DeckThemeId::Custom:      return "DECK: CUSTOM [D]";
         default: return "DECK [D]";
     }
 }
@@ -1474,6 +1479,32 @@ struct InteractiveContext {
                         });
                         break;
                     }
+                } else if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::Anime) {
+                    std::error_code ec;
+                    bool exists = std::filesystem::exists("decks/anime.eats", ec) ||
+                                  std::filesystem::exists("/decks/anime.eats", ec) ||
+                                  std::filesystem::exists("/user/anime.eats", ec);
+                    if (!exists) {
+                        EM_ASM({
+                            if (window.loadAnimeDeck) {
+                                window.loadAnimeDeck();
+                            }
+                        });
+                        break;
+                    }
+                } else if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::Cyberpunk) {
+                    std::error_code ec;
+                    bool exists = std::filesystem::exists("decks/cyberpunk.eats", ec) ||
+                                  std::filesystem::exists("/decks/cyberpunk.eats", ec) ||
+                                  std::filesystem::exists("/user/cyberpunk.eats", ec);
+                    if (!exists) {
+                        EM_ASM({
+                            if (window.loadCyberpunkDeck) {
+                                window.loadCyberpunkDeck();
+                            }
+                        });
+                        break;
+                    }
                 }
 #endif
                 CardTextureCache::instance().loadDeckTheme(static_cast<DeckThemeId>(nextDeck));
@@ -1798,6 +1829,15 @@ int TableRenderer::runInteractiveWindow(
     s_activeContext = std::make_unique<InteractiveContext>(board, foley, width, height);
     InteractiveContext& ctx = *s_activeContext;
     ctx.window = window;
+
+    glfwSetDropCallback(window, [](GLFWwindow* /*win*/, int count, const char* paths[]) {
+        for (int i = 0; i < count; ++i) {
+            if (paths && paths[i]) {
+                std::cout << "[SolEnshaded] Drag-and-drop file received: " << paths[i] << std::endl;
+                loadFile(paths[i]);
+            }
+        }
+    });
 #if defined(__EMSCRIPTEN__)
     ctx.fbWidth = initFbW;
     ctx.fbHeight = initFbH;
@@ -1856,6 +1896,261 @@ int TableRenderer::runInteractiveWindow(
 #endif
 }
 
+bool loadEatsPackage(InteractiveContext& ctx, const std::string& filePath, int cardW, int cardH) {
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file.is_open()) return false;
+
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+
+    std::string scriptPart = content;
+    std::string blobPart;
+    size_t markerPos = content.find("__BLOB__");
+    if (markerPos == std::string::npos) {
+        markerPos = content.find("__DATA__");
+    }
+    if (markerPos != std::string::npos) {
+        scriptPart = content.substr(0, markerPos);
+        size_t nextLine = content.find('\n', markerPos);
+        if (nextLine != std::string::npos) {
+            blobPart = content.substr(nextLine + 1);
+        }
+    }
+
+    eatsbits::eatscript::Evaluator evaluator;
+    bool deckConfigured = false;
+    bool bgConfigured = false;
+    std::string themeName = "Custom Experience";
+
+    auto setThemeFn = [&](const std::vector<eatsbits::eatscript::Value>& args,
+                          const std::map<std::string, eatsbits::eatscript::Value>& kwargs) -> eatsbits::eatscript::Value {
+        if (!args.empty() && args[0].isString()) {
+            themeName = args[0].asString();
+        } else if (kwargs.find("name") != kwargs.end()) {
+            themeName = kwargs.at("name").asString();
+        }
+        return eatsbits::eatscript::Value(true);
+    };
+
+    auto setBgFn = [&](const std::vector<eatsbits::eatscript::Value>& args,
+                       const std::map<std::string, eatsbits::eatscript::Value>& kwargs) -> eatsbits::eatscript::Value {
+        std::string rawStr;
+        if (!args.empty() && args[0].isString()) {
+            rawStr = args[0].asString();
+        } else if (kwargs.find("blob") != kwargs.end()) {
+            rawStr = kwargs.at("blob").asString();
+        }
+
+        std::vector<uint8_t> bgBytes;
+        if (rawStr.rfind("data:", 0) == 0) {
+            auto parsed = eatsbits::ui::parseDataUri(rawStr);
+            if (parsed && !parsed->data.empty()) {
+                bgBytes = std::move(parsed->data);
+            }
+        }
+        if (bgBytes.empty() && !rawStr.empty()) {
+            bgBytes = eatsbits::ui::base64Decode(rawStr);
+            if (bgBytes.empty()) {
+                bgBytes.assign(rawStr.begin(), rawStr.end());
+            }
+        }
+        if (bgBytes.empty() && !blobPart.empty()) {
+            bgBytes.assign(blobPart.begin(), blobPart.end());
+        }
+
+        const eatsbits::eatscript::Value* optsDict = nullptr;
+        if (args.size() > 1 && args[1].isDict()) {
+            optsDict = &args[1];
+        }
+
+        auto getOptFloat = [&](const std::string& key, float defVal) {
+            if (kwargs.find(key) != kwargs.end()) return kwargs.at(key).asFloat(defVal);
+            if (optsDict && optsDict->hasKey(key)) return optsDict->get(key).asFloat(defVal);
+            return defVal;
+        };
+
+        float uvScale = getOptFloat("uv_scale", 2.0f);
+        float normalStrength = getOptFloat("normal_strength", 1.35f);
+        float specularIntensity = getOptFloat("specular_intensity", 0.65f);
+        float ambientLevel = getOptFloat("ambient_level", 0.22f);
+        float diffuseLevel = getOptFloat("diffuse_level", 0.88f);
+        float tintR = getOptFloat("tint_r", 1.0f);
+        float tintG = getOptFloat("tint_g", 1.0f);
+        float tintB = getOptFloat("tint_b", 1.0f);
+
+        if (optsDict && optsDict->hasKey("tint")) {
+            auto tintVal = optsDict->get("tint");
+            if (tintVal.isList() && tintVal.listVal.size() >= 3) {
+                tintR = tintVal.listVal[0].asFloat(tintR);
+                tintG = tintVal.listVal[1].asFloat(tintG);
+                tintB = tintVal.listVal[2].asFloat(tintB);
+            }
+        }
+
+        if (!bgBytes.empty() &&
+            ProceduralBackgroundSystem::instance().loadCustomThemeFromMemory(
+                bgBytes.data(), bgBytes.size(),
+                uvScale, normalStrength, specularIntensity,
+                ambientLevel, diffuseLevel, tintR, tintG, tintB)) {
+            bgConfigured = true;
+            return eatsbits::eatscript::Value(true);
+        }
+        return eatsbits::eatscript::Value(false);
+    };
+
+    auto setDeckFn = [&](const std::vector<eatsbits::eatscript::Value>& args,
+                         const std::map<std::string, eatsbits::eatscript::Value>& kwargs) -> eatsbits::eatscript::Value {
+        std::string rawStr;
+        if (!args.empty() && args[0].isString()) {
+            rawStr = args[0].asString();
+        } else if (kwargs.find("blob") != kwargs.end()) {
+            rawStr = kwargs.at("blob").asString();
+        }
+
+        std::vector<uint8_t> deckBytes;
+        std::string format = "svgz";
+
+        if (rawStr.rfind("data:", 0) == 0) {
+            auto parsed = eatsbits::ui::parseDataUri(rawStr);
+            if (parsed && !parsed->data.empty()) {
+                deckBytes = std::move(parsed->data);
+                if (parsed->mimeType.find("svg") != std::string::npos) format = "svg";
+                else if (parsed->mimeType.find("png") != std::string::npos) format = "png";
+            }
+        }
+        if (deckBytes.empty() && !rawStr.empty()) {
+            deckBytes = eatsbits::ui::base64Decode(rawStr);
+            if (deckBytes.empty()) {
+                deckBytes.assign(rawStr.begin(), rawStr.end());
+            }
+        }
+        if (deckBytes.empty() && !blobPart.empty()) {
+            deckBytes.assign(blobPart.begin(), blobPart.end());
+        }
+
+        const eatsbits::eatscript::Value* optsDict = nullptr;
+        if (args.size() > 1 && args[1].isDict()) {
+            optsDict = &args[1];
+        }
+
+        auto getOptString = [&](const std::string& key, const std::string& defVal) {
+            if (kwargs.find(key) != kwargs.end()) return kwargs.at(key).asString();
+            if (optsDict && optsDict->hasKey(key)) return optsDict->get(key).asString();
+            return defVal;
+        };
+        auto getOptInt = [&](const std::string& key, int defVal) {
+            if (kwargs.find(key) != kwargs.end()) return kwargs.at(key).asInt(defVal);
+            if (optsDict && optsDict->hasKey(key)) return optsDict->get(key).asInt(defVal);
+            return defVal;
+        };
+
+        format = getOptString("format", format);
+        int targetW = getOptInt("card_w", cardW);
+        int targetH = getOptInt("card_h", cardH);
+
+        if (!deckBytes.empty() &&
+            CardTextureCache::instance().loadDeckFromMemory(
+                deckBytes.data(), deckBytes.size(), format, targetW, targetH,
+                DeckThemeId::Custom, filePath)) {
+            deckConfigured = true;
+            return eatsbits::eatscript::Value(true);
+        }
+        return eatsbits::eatscript::Value(false);
+    };
+
+    evaluator.setVariable("sol", eatsbits::eatscript::Value(std::map<std::string, eatsbits::eatscript::Value>{}));
+    evaluator.registerMemberFunction("sol", "create_theme", setThemeFn);
+    evaluator.registerMemberFunction("sol", "set_theme", setThemeFn);
+    evaluator.registerMemberFunction("sol", "set_background", setBgFn);
+    evaluator.registerMemberFunction("sol", "set_deck", setDeckFn);
+
+    evaluator.registerFunction("create_theme", setThemeFn);
+    evaluator.registerFunction("set_theme", setThemeFn);
+    evaluator.registerFunction("set_background", setBgFn);
+    evaluator.registerFunction("set_deck", setDeckFn);
+
+    evaluator.evaluateSource(scriptPart);
+
+    // If neither background nor deck was loaded via API call, fall back to legacy single-purpose loaders
+    if (!deckConfigured && !bgConfigured) {
+        if (CardTextureCache::instance().loadEatsDeck(filePath, cardW, cardH)) {
+            deckConfigured = true;
+        } else if (ProceduralBackgroundSystem::instance().loadCustomEatsTheme(filePath)) {
+            bgConfigured = true;
+        }
+    }
+
+    if (deckConfigured && ctx.renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
+        CardTextureCache::instance().buildGpuAtlas(ctx.renderer);
+    }
+
+    if (deckConfigured && bgConfigured) {
+        ctx.foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
+        ctx.foley.triggerSound(FoleySound::WoodClick, 0.85f);
+        std::cout << "[SolEnshaded] Successfully loaded unified .eats experience (" << themeName
+                  << "): deck + table background from: " << filePath << "\n";
+        return true;
+    } else if (deckConfigured) {
+        ctx.foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
+        std::cout << "[SolEnshaded] Successfully loaded custom deck from: " << filePath << "\n";
+        return true;
+    } else if (bgConfigured) {
+        ctx.foley.triggerSound(FoleySound::WoodClick, 0.85f);
+        std::cout << "[SolEnshaded] Successfully loaded custom theme from: " << filePath << "\n";
+        return true;
+    }
+
+    return false;
+}
+
+bool loadFile(const std::string& filePath) {
+    if (filePath.empty() || !s_activeContext) return false;
+
+    auto& ctx = *s_activeContext;
+    int cardW = static_cast<int>(ctx.board.cardWidth());
+    int cardH = static_cast<int>(ctx.board.cardHeight());
+    if (cardW <= 0) cardW = 112;
+    if (cardH <= 0) cardH = 156;
+
+    std::string ext;
+    size_t dot = filePath.rfind('.');
+    if (dot != std::string::npos) {
+        ext = filePath.substr(dot);
+        for (char& c : ext) c = static_cast<char>(std::tolower(c));
+    }
+
+    if (ext == ".eats") {
+        if (loadEatsPackage(ctx, filePath, cardW, cardH)) {
+            return true;
+        }
+    } else if (ext == ".png") {
+        if (CardTextureCache::instance().loadBitmapDeck(filePath, cardW, cardH)) {
+            if (ctx.renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
+                CardTextureCache::instance().buildGpuAtlas(ctx.renderer);
+            }
+            ctx.foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
+            std::cout << "[SolEnshaded] Successfully loaded custom PNG deck from: " << filePath << "\n";
+            return true;
+        }
+    } else if (ext == ".svg") {
+        if (CardTextureCache::instance().loadSvgDeck(filePath, cardW, cardH)) {
+            if (ctx.renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
+                CardTextureCache::instance().buildGpuAtlas(ctx.renderer);
+            }
+            ctx.foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
+            std::cout << "[SolEnshaded] Successfully loaded custom SVG deck from: " << filePath << "\n";
+            return true;
+        }
+    } else {
+        if (loadEatsPackage(ctx, filePath, cardW, cardH)) {
+            return true;
+        }
+    }
+
+    std::cerr << "[SolEnshaded] Unrecognized or invalid file payload: " << filePath << "\n";
+    return false;
+}
+
 } // namespace solenshaded
 
 extern "C" {
@@ -1864,34 +2159,8 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE
 #endif
 bool solenshaded_load_file_from_web(const char* virtualPath) {
-    if (!virtualPath || !solenshaded::s_activeContext) return false;
-    std::string path(virtualPath);
-
-    auto& ctx = *solenshaded::s_activeContext;
-    int cardW = static_cast<int>(ctx.board.cardWidth());
-    int cardH = static_cast<int>(ctx.board.cardHeight());
-    if (cardW <= 0) cardW = 112;
-    if (cardH <= 0) cardH = 156;
-
-    // 1. Try loading as an Eatscript card deck
-    if (solenshaded::CardTextureCache::instance().loadEatsDeck(path, cardW, cardH)) {
-        if (ctx.renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
-            solenshaded::CardTextureCache::instance().buildGpuAtlas(ctx.renderer);
-        }
-        ctx.foley.triggerSound(solenshaded::FoleySound::DeckShuffle, 0.9f);
-        std::cout << "[SolEnshaded Web] Successfully loaded custom deck from: " << path << "\n";
-        return true;
-    }
-
-    // 2. Try loading as a custom .eats background theme
-    if (solenshaded::ProceduralBackgroundSystem::instance().loadCustomEatsTheme(path)) {
-        ctx.foley.triggerSound(solenshaded::FoleySound::WoodClick, 0.85f);
-        std::cout << "[SolEnshaded Web] Successfully loaded custom theme from: " << path << "\n";
-        return true;
-    }
-
-    std::cerr << "[SolEnshaded Web] Unrecognized or invalid .eats payload: " << path << "\n";
-    return false;
+    if (!virtualPath) return false;
+    return solenshaded::loadFile(virtualPath);
 }
 
 } // extern "C"

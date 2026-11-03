@@ -52,6 +52,9 @@ struct CardTexture {
 enum class DeckThemeId : uint8_t {
     ClassicSvg  = 0,
     SteampunkAi = 1,
+    Anime       = 2,
+    Cyberpunk   = 3,
+    Custom      = 4,
     Count
 };
 
@@ -64,6 +67,15 @@ public:
 
     bool initialize(int cardW = kDefaultCardW, int cardH = kDefaultCardH);
     bool loadEatsDeck(const std::string& eatsFilePath, int cardW = kDefaultCardW, int cardH = kDefaultCardH);
+    bool loadDeckFromMemory(
+        const uint8_t* data,
+        size_t size,
+        const std::string& format = "svgz",
+        int cardW = kDefaultCardW,
+        int cardH = kDefaultCardH,
+        DeckThemeId theme = DeckThemeId::Custom,
+        const std::string& cacheKey = ""
+    );
     bool loadSvgDeck(const std::string& svgFilePath, int cardW = kDefaultCardW, int cardH = kDefaultCardH);
     bool loadBitmapDeck(const std::string& bitmapFilePath, int cardW = kDefaultCardW, int cardH = kDefaultCardH);
     bool loadDeckTheme(DeckThemeId theme, int cardW = kDefaultCardW, int cardH = kDefaultCardH);

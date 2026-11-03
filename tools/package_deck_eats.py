@@ -23,15 +23,22 @@ def package_svg_deck(svg_path, out_eats_path, name="Classic Victorian", theme_id
     content = f'''# SolEnshaded Deck Recipe — {name}
 # Connects Hardwood Solitaire 3.0 vector elegance with compressed binary asset embedding.
 
-name        = "{name}"
-theme_id    = "{theme_id}"
-format      = "svgz"
-card_w      = 360
-card_h      = 504
-author      = "Public Domain CC0"
-description = "Lossless Deflate-compressed SVG vector master sheet."
+sol.set_theme({{
+    id: "{theme_id}",
+    name: "{name}",
+    author: "Public Domain CC0",
+    description: "Lossless Deflate-compressed SVG vector master sheet.",
+    version: 1
+}})
 
 deck_blob = """{b64_svg}"""
+
+sol.set_deck(deck_blob, {{
+    format: "svgz",
+    card_w: 360,
+    card_h: 504,
+    theme_id: "{theme_id}"
+}})
 '''
     with open(out_eats_path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -51,15 +58,22 @@ def package_png_deck(png_path, out_eats_path, name="Steampunk AI", theme_id="ste
     content = f'''# SolEnshaded Deck Recipe — {name}
 # Connects Hardwood Solitaire 3.0 tactile style with high-res raster asset embedding.
 
-name        = "{name}"
-theme_id    = "{theme_id}"
-format      = "png"
-card_w      = 360
-card_h      = 504
-author      = "SolEnshaded / AI"
-description = "High-resolution 3240x3024 9x6 PNG master sheet embedded in Eatscript."
+sol.set_theme({{
+    id: "{theme_id}",
+    name: "{name}",
+    author: "SolEnshaded / AI",
+    description: "High-resolution 3240x3024 9x6 PNG master sheet embedded in Eatscript.",
+    version: 1
+}})
 
 deck_blob = """{b64_png}"""
+
+sol.set_deck(deck_blob, {{
+    format: "png",
+    card_w: 360,
+    card_h: 504,
+    theme_id: "{theme_id}"
+}})
 '''
     with open(out_eats_path, "w", encoding="utf-8") as f:
         f.write(content)

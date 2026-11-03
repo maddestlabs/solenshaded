@@ -1,5 +1,6 @@
 #include "solenshaded/procedural_background.hpp"
 #include "eatsbits/eatscript/evaluator.hpp"
+#include "eatsbits/ui/base64.hpp"
 #include "stb_image.h"
 #include <algorithm>
 #include <cmath>
@@ -644,6 +645,89 @@ const PbrMaterialDef* getMaterialDefForTheme(TableThemeId theme) {
     }
 }
 
+bool loadMaterialFromBytes(const uint8_t* blobPtr, size_t blobSize, PbrTextureData& outTex, PbrMaterialDef& ioDef) {
+    if (!blobPtr || blobSize == 0) return false;
+
+    // 1. Check for EBKG container (Channel-packed PBR)
+    if (blobSize >= sizeof(BackgroundBlobHeader) &&
+        std::memcmp(blobPtr, "EBKG", 4) == 0) {
+        const auto* header = reinterpret_cast<const BackgroundBlobHeader*>(blobPtr);
+        if (header->version != 1) return false;
+
+        if (static_cast<size_t>(header->colorOffset) + header->colorSize > blobSize ||
+            static_cast<size_t>(header->normalOffset) + header->normalSize > blobSize ||
+            static_cast<size_t>(header->ormOffset) + header->ormSize > blobSize) {
+            return false;
+        }
+
+        int w = 0, h = 0, c = 0;
+        stbi_uc* colorData = stbi_load_from_memory(blobPtr + header->colorOffset, static_cast<int>(header->colorSize), &w, &h, &c, 3);
+        if (!colorData || w <= 0 || h <= 0) {
+            if (colorData) stbi_image_free(colorData);
+            return false;
+        }
+        outTex.width = w;
+        outTex.height = h;
+        outTex.color.assign(colorData, colorData + static_cast<size_t>(w * h * 3));
+        stbi_image_free(colorData);
+
+        int nw = 0, nh = 0;
+        stbi_uc* normalData = stbi_load_from_memory(blobPtr + header->normalOffset, static_cast<int>(header->normalSize), &nw, &nh, &c, 3);
+        if (!normalData || nw != w || nh != h) {
+            if (normalData) stbi_image_free(normalData);
+            outTex.color.clear();
+            return false;
+        }
+        outTex.normal.assign(normalData, normalData + static_cast<size_t>(w * h * 3));
+        stbi_image_free(normalData);
+
+        int ow = 0, oh = 0;
+        stbi_uc* ormData = stbi_load_from_memory(blobPtr + header->ormOffset, static_cast<int>(header->ormSize), &ow, &oh, &c, 3);
+        if (!ormData || ow != w || oh != h) {
+            if (ormData) stbi_image_free(ormData);
+            outTex.color.clear();
+            outTex.normal.clear();
+            return false;
+        }
+        outTex.orm.assign(ormData, ormData + static_cast<size_t>(w * h * 3));
+        stbi_image_free(ormData);
+
+        outTex.loaded = true;
+        return true;
+    }
+
+    // 2. Generic image fallback (PNG, JPEG, WebP, etc.)
+    int w = 0, h = 0, c = 0;
+    stbi_uc* imgData = stbi_load_from_memory(blobPtr, static_cast<int>(blobSize), &w, &h, &c, 3);
+    if (imgData && w > 0 && h > 0) {
+        outTex.width = w;
+        outTex.height = h;
+        outTex.color.assign(imgData, imgData + static_cast<size_t>(w * h * 3));
+        stbi_image_free(imgData);
+
+        // Synthesize flat tangent normal (128, 128, 255)
+        outTex.normal.resize(static_cast<size_t>(w * h * 3));
+        for (size_t i = 0; i < static_cast<size_t>(w * h); ++i) {
+            outTex.normal[i * 3 + 0] = 128;
+            outTex.normal[i * 3 + 1] = 128;
+            outTex.normal[i * 3 + 2] = 255;
+        }
+
+        // Synthesize neutral ORM (R=AO=255, G=Roughness=140, B=Metallic=0)
+        outTex.orm.resize(static_cast<size_t>(w * h * 3));
+        for (size_t i = 0; i < static_cast<size_t>(w * h); ++i) {
+            outTex.orm[i * 3 + 0] = 255;
+            outTex.orm[i * 3 + 1] = 140;
+            outTex.orm[i * 3 + 2] = 0;
+        }
+
+        outTex.loaded = true;
+        return true;
+    }
+
+    return false;
+}
+
 bool loadMaterialFromEats(const std::string& filePath, PbrTextureData& outTex, PbrMaterialDef& ioDef) {
     if (outTex.loaded) return true;
     outTex.loadAttempted = true;
@@ -654,113 +738,150 @@ bool loadMaterialFromEats(const std::string& filePath, PbrTextureData& outTex, P
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
+    std::string scriptPart = content;
+    std::string blobPart;
     size_t markerPos = content.find("__BLOB__");
     if (markerPos == std::string::npos) {
         markerPos = content.find("__DATA__");
     }
-    if (markerPos == std::string::npos) {
-        std::cerr << "[SolEnshaded] No __BLOB__ marker found in .eats theme: " << filePath << "\n";
-        return false;
+    if (markerPos != std::string::npos) {
+        scriptPart = content.substr(0, markerPos);
+        size_t nextLine = content.find('\n', markerPos);
+        if (nextLine != std::string::npos) {
+            blobPart = content.substr(nextLine + 1);
+        }
     }
 
-    std::string scriptPart = content.substr(0, markerPos);
-    size_t nextLine = content.find('\n', markerPos);
-    if (nextLine == std::string::npos || nextLine + 1 >= content.size()) {
-        std::cerr << "[SolEnshaded] Empty payload after __BLOB__ in: " << filePath << "\n";
-        return false;
-    }
-
-    // Evaluate Eatscript metadata
+    // Evaluate script with API bindings
     eatsbits::eatscript::Evaluator evaluator;
+    bool apiCalled = false;
+    std::vector<uint8_t> apiBlob;
+
+    auto setBgFn = [&](const std::vector<eatsbits::eatscript::Value>& args,
+                       const std::map<std::string, eatsbits::eatscript::Value>& kwargs) -> eatsbits::eatscript::Value {
+        apiCalled = true;
+        std::string rawStr;
+        if (!args.empty() && args[0].isString()) {
+            rawStr = args[0].asString();
+        } else if (kwargs.find("blob") != kwargs.end()) {
+            rawStr = kwargs.at("blob").asString();
+        }
+
+        if (rawStr.rfind("data:", 0) == 0) {
+            auto parsed = eatsbits::ui::parseDataUri(rawStr);
+            if (parsed && !parsed->data.empty()) {
+                apiBlob = std::move(parsed->data);
+            }
+        }
+        if (apiBlob.empty() && !rawStr.empty()) {
+            apiBlob = eatsbits::ui::base64Decode(rawStr);
+            if (apiBlob.empty()) {
+                apiBlob.assign(rawStr.begin(), rawStr.end());
+            }
+        }
+
+        const eatsbits::eatscript::Value* optsDict = nullptr;
+        if (args.size() > 1 && args[1].isDict()) {
+            optsDict = &args[1];
+        }
+
+        auto getOptFloat = [&](const std::string& key, float defVal) {
+            if (kwargs.find(key) != kwargs.end()) return kwargs.at(key).asFloat(defVal);
+            if (optsDict && optsDict->hasKey(key)) return optsDict->get(key).asFloat(defVal);
+            return defVal;
+        };
+
+        ioDef.uvScale = getOptFloat("uv_scale", ioDef.uvScale);
+        ioDef.normalStrength = getOptFloat("normal_strength", ioDef.normalStrength);
+        ioDef.specularIntensity = getOptFloat("specular_intensity", ioDef.specularIntensity);
+        ioDef.ambientLevel = getOptFloat("ambient_level", ioDef.ambientLevel);
+        ioDef.diffuseLevel = getOptFloat("diffuse_level", ioDef.diffuseLevel);
+        ioDef.tintR = getOptFloat("tint_r", ioDef.tintR);
+        ioDef.tintG = getOptFloat("tint_g", ioDef.tintG);
+        ioDef.tintB = getOptFloat("tint_b", ioDef.tintB);
+
+        // Check array tint: [r, g, b]
+        if (optsDict && optsDict->hasKey("tint")) {
+            auto tintVal = optsDict->get("tint");
+            if (tintVal.isList() && tintVal.listVal.size() >= 3) {
+                ioDef.tintR = tintVal.listVal[0].asFloat(ioDef.tintR);
+                ioDef.tintG = tintVal.listVal[1].asFloat(ioDef.tintG);
+                ioDef.tintB = tintVal.listVal[2].asFloat(ioDef.tintB);
+            }
+        }
+
+        return eatsbits::eatscript::Value(true);
+    };
+
+    auto themeDummyFn = [](const auto&, const auto&) { return eatsbits::eatscript::Value(true); };
+    evaluator.setVariable("sol", eatsbits::eatscript::Value(std::map<std::string, eatsbits::eatscript::Value>{}));
+    evaluator.registerMemberFunction("sol", "create_theme", themeDummyFn);
+    evaluator.registerMemberFunction("sol", "set_theme", themeDummyFn);
+    evaluator.registerMemberFunction("sol", "set_background", setBgFn);
+    evaluator.registerFunction("create_theme", themeDummyFn);
+    evaluator.registerFunction("set_theme", themeDummyFn);
+    evaluator.registerFunction("set_background", setBgFn);
+
     evaluator.evaluateSource(scriptPart);
 
-    if (evaluator.hasVariable("uv_scale")) {
-        ioDef.uvScale = evaluator.getVariable("uv_scale").asFloat(ioDef.uvScale);
-    }
-    if (evaluator.hasVariable("normal_strength")) {
-        ioDef.normalStrength = evaluator.getVariable("normal_strength").asFloat(ioDef.normalStrength);
-    }
-    if (evaluator.hasVariable("specular_intensity")) {
-        ioDef.specularIntensity = evaluator.getVariable("specular_intensity").asFloat(ioDef.specularIntensity);
-    }
-    if (evaluator.hasVariable("ambient_level")) {
-        ioDef.ambientLevel = evaluator.getVariable("ambient_level").asFloat(ioDef.ambientLevel);
-    }
-    if (evaluator.hasVariable("diffuse_level")) {
-        ioDef.diffuseLevel = evaluator.getVariable("diffuse_level").asFloat(ioDef.diffuseLevel);
-    }
-    if (evaluator.hasVariable("tint_r")) {
-        ioDef.tintR = evaluator.getVariable("tint_r").asFloat(ioDef.tintR);
-    }
-    if (evaluator.hasVariable("tint_g")) {
-        ioDef.tintG = evaluator.getVariable("tint_g").asFloat(ioDef.tintG);
-    }
-    if (evaluator.hasVariable("tint_b")) {
-        ioDef.tintB = evaluator.getVariable("tint_b").asFloat(ioDef.tintB);
+    std::vector<uint8_t> rawBytes;
+    if (apiCalled && !apiBlob.empty()) {
+        rawBytes = std::move(apiBlob);
+    } else {
+        if (evaluator.hasVariable("uv_scale")) {
+            ioDef.uvScale = evaluator.getVariable("uv_scale").asFloat(ioDef.uvScale);
+        }
+        if (evaluator.hasVariable("normal_strength")) {
+            ioDef.normalStrength = evaluator.getVariable("normal_strength").asFloat(ioDef.normalStrength);
+        }
+        if (evaluator.hasVariable("specular_intensity")) {
+            ioDef.specularIntensity = evaluator.getVariable("specular_intensity").asFloat(ioDef.specularIntensity);
+        }
+        if (evaluator.hasVariable("ambient_level")) {
+            ioDef.ambientLevel = evaluator.getVariable("ambient_level").asFloat(ioDef.ambientLevel);
+        }
+        if (evaluator.hasVariable("diffuse_level")) {
+            ioDef.diffuseLevel = evaluator.getVariable("diffuse_level").asFloat(ioDef.diffuseLevel);
+        }
+        if (evaluator.hasVariable("tint_r")) {
+            ioDef.tintR = evaluator.getVariable("tint_r").asFloat(ioDef.tintR);
+        }
+        if (evaluator.hasVariable("tint_g")) {
+            ioDef.tintG = evaluator.getVariable("tint_g").asFloat(ioDef.tintG);
+        }
+        if (evaluator.hasVariable("tint_b")) {
+            ioDef.tintB = evaluator.getVariable("tint_b").asFloat(ioDef.tintB);
+        }
+
+        if (!blobPart.empty()) {
+            rawBytes.assign(blobPart.begin(), blobPart.end());
+        } else {
+            std::string blobStr;
+            if (evaluator.hasVariable("bg_blob")) {
+                blobStr = evaluator.getVariable("bg_blob").asString();
+            } else if (evaluator.hasVariable("background_blob")) {
+                blobStr = evaluator.getVariable("background_blob").asString();
+            } else if (evaluator.hasVariable("blob")) {
+                blobStr = evaluator.getVariable("blob").asString();
+            }
+            if (!blobStr.empty()) {
+                rawBytes = eatsbits::ui::base64Decode(blobStr);
+            }
+        }
     }
 
-    const uint8_t* blobPtr = reinterpret_cast<const uint8_t*>(content.data() + nextLine + 1);
-    size_t blobSize = content.size() - (nextLine + 1);
-
-    if (blobSize < sizeof(BackgroundBlobHeader)) {
-        std::cerr << "[SolEnshaded] Theme blob too small for EBKG header: " << filePath << "\n";
+    if (rawBytes.empty()) {
+        std::cerr << "[SolEnshaded] No background payload found in Eatscript theme: " << filePath << "\n";
         return false;
     }
 
-    const auto* header = reinterpret_cast<const BackgroundBlobHeader*>(blobPtr);
-    if (std::memcmp(header->magic, "EBKG", 4) != 0 || header->version != 1) {
-        std::cerr << "[SolEnshaded] Invalid EBKG magic or version in: " << filePath << "\n";
+    if (!loadMaterialFromBytes(rawBytes.data(), rawBytes.size(), outTex, ioDef)) {
+        std::cerr << "[SolEnshaded] Failed to decode background material in: " << filePath << "\n";
         return false;
     }
 
-    if (static_cast<size_t>(header->colorOffset) + header->colorSize > blobSize ||
-        static_cast<size_t>(header->normalOffset) + header->normalSize > blobSize ||
-        static_cast<size_t>(header->ormOffset) + header->ormSize > blobSize) {
-        std::cerr << "[SolEnshaded] EBKG chunk offsets exceed blob bounds in: " << filePath << "\n";
-        return false;
-    }
-
-    // 1. Decode Color Image (RGB)
-    int w = 0, h = 0, c = 0;
-    stbi_uc* colorData = stbi_load_from_memory(blobPtr + header->colorOffset, static_cast<int>(header->colorSize), &w, &h, &c, 3);
-    if (!colorData || w <= 0 || h <= 0) {
-        if (colorData) stbi_image_free(colorData);
-        std::cerr << "[SolEnshaded] Failed to decode Color chunk in: " << filePath << "\n";
-        return false;
-    }
-    outTex.width = w;
-    outTex.height = h;
-    outTex.color.assign(colorData, colorData + static_cast<size_t>(w * h * 3));
-    stbi_image_free(colorData);
-
-    // 2. Decode Normal Image (RGB)
-    int nw = 0, nh = 0;
-    stbi_uc* normalData = stbi_load_from_memory(blobPtr + header->normalOffset, static_cast<int>(header->normalSize), &nw, &nh, &c, 3);
-    if (!normalData || nw != w || nh != h) {
-        if (normalData) stbi_image_free(normalData);
-        outTex.color.clear();
-        std::cerr << "[SolEnshaded] Normal chunk dimension mismatch in: " << filePath << "\n";
-        return false;
-    }
-    outTex.normal.assign(normalData, normalData + static_cast<size_t>(w * h * 3));
-    stbi_image_free(normalData);
-
-    // 3. Decode ORM Image (RGB)
-    int ow = 0, oh = 0;
-    stbi_uc* ormData = stbi_load_from_memory(blobPtr + header->ormOffset, static_cast<int>(header->ormSize), &ow, &oh, &c, 3);
-    if (!ormData || ow != w || oh != h) {
-        if (ormData) stbi_image_free(ormData);
-        outTex.color.clear();
-        outTex.normal.clear();
-        std::cerr << "[SolEnshaded] ORM chunk dimension mismatch in: " << filePath << "\n";
-        return false;
-    }
-    outTex.orm.assign(ormData, ormData + static_cast<size_t>(w * h * 3));
-    stbi_image_free(ormData);
-
-    outTex.loaded = true;
     std::cout << "[SolEnshaded] Successfully loaded single-file .eats theme: " << filePath
-              << " (" << w << "x" << h << ", channel-packed ORM)\n";
+              << " (" << outTex.width << "x" << outTex.height << ", channel-packed ORM)\n";
     return true;
 }
 
@@ -1128,6 +1249,37 @@ bool ProceduralBackgroundSystem::hasPbrMaterial(TableThemeId theme) const noexce
     if (!resolveThemePath(std::string(def->materialName) + ".eats").empty()) return true;
     std::string colorFile = std::string(def->materialName) + "_1K-JPG_Color.jpg";
     return !resolveTexturePath(colorFile).empty();
+}
+
+bool ProceduralBackgroundSystem::loadCustomThemeFromMemory(
+    const uint8_t* blobData,
+    size_t blobSize,
+    float uvScale,
+    float normalStrength,
+    float specularIntensity,
+    float ambientLevel,
+    float diffuseLevel,
+    float tintR,
+    float tintG,
+    float tintB
+) {
+    if (!impl_ || !blobData || blobSize == 0) return false;
+
+    PbrMaterialDef customDef{
+        "CustomMaterial", "custom",
+        uvScale, normalStrength, specularIntensity,
+        ambientLevel, diffuseLevel,
+        tintR, tintG, tintB
+    };
+    PbrTextureData customTex;
+    if (loadMaterialFromBytes(blobData, blobSize, customTex, customDef)) {
+        impl_->customThemeLoaded = true;
+        impl_->customTexture = std::move(customTex);
+        impl_->customDef = customDef;
+        impl_->invalidate();
+        return true;
+    }
+    return false;
 }
 
 bool ProceduralBackgroundSystem::loadCustomEatsTheme(const std::string& eatsFilePath) {

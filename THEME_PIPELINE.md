@@ -10,11 +10,12 @@ Each `.eats` background theme bundles an **Eatscript text header** and a **binar
 
 ```
 +-------------------------------------------------------------+
-| Eatscript Metadata Recipe Header (UTF-8 Plain Text)        |
-| - Theme name, material ID, author, and description          |
-| - Live physical shading parameters:                         |
-|   * uv_scale, normal_strength, specular_intensity           |
-|   * ambient_level, diffuse_level, tint_r, tint_g, tint_b     |
+| Eatscript API Recipe Header (UTF-8 Plain Text)              |
+| - sol.set_theme({ id, name, author, description, version })  |
+| - sol.set_background(blob, {                                |
+|     format, uv_scale, normal_strength, specular_intensity,  |
+|     ambient_level, diffuse_level, tint: [r, g, b]            |
+|   })                                                        |
 +-------------------------------------------------------------+
 | Marker: \n__BLOB__\n                                        |
 +-------------------------------------------------------------+
@@ -78,27 +79,28 @@ python tools/theme_pipeline.py info themes/rosewood_parlor.eats
 Output:
 ```text
 ============================================================
-Eatscript Background Theme: rosewood_parlor.eats (2,823,701 bytes)
+Eatscript Background Theme: rosewood_parlor.eats (2,823,623 bytes)
 ============================================================
-# SolEnshaded Background Theme Package - Rosewood Parlor
+# SolEnshaded Background Theme Package — Rosewood Parlor
 # Channel-Packed PBR Surface with Tangent Normal Relief and Specular Sheen
 
-theme_name         = "Rosewood Parlor"
-material_id        = "Wood049"
-format             = "pbr_orm"
-version            = 1
-author             = "AmbientCG / CC0"
-description        = "Deep exotic rosewood grain with satin polyurethane sheen and growth ring relief."
+sol.set_theme({
+    id: "Wood049",
+    name: "Rosewood Parlor",
+    author: "AmbientCG / CC0",
+    description: "Deep exotic rosewood grain with satin polyurethane sheen and growth ring relief.",
+    version: 1
+})
 
-# Physical Shading Parameters
-uv_scale           = 2.00
-normal_strength    = 1.35
-specular_intensity = 0.65
-ambient_level      = 0.22
-diffuse_level      = 0.88
-tint_r             = 1.00
-tint_g             = 0.95
-tint_b             = 0.92
+sol.set_background(blob = "", {
+    format: "ebkg",
+    uv_scale: 2.00,
+    normal_strength: 1.35,
+    specular_intensity: 0.65,
+    ambient_level: 0.22,
+    diffuse_level: 0.88,
+    tint: [1.00, 0.95, 0.90]
+})
 ------------------------------------------------------------
 Blob Magic      : EBKG
 Blob Version    : 1

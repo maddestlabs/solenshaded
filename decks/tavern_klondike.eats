@@ -1,7 +1,11 @@
 # Solitaire Enshaded (SolEnshaded) — Default Deck & Table Recipe
 # Connects Hardwood Solitaire 3.0 simplicity with Eatscharted's Shade / Spectre lore.
 
-variant = "klondike_draw_1"
-theme   = "tavern_heartwood"
-deck    = "classic"
-seed    = 2026
+sol.set_theme({
+    id: "tavern_klondike",
+    name: "Tavern Klondike",
+    variant: "klondike_draw_1",
+    theme: "tavern_heartwood",
+    deck: "classic",
+    seed: 2026
+})

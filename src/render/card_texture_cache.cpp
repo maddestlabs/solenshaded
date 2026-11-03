@@ -160,6 +160,70 @@ static void bakeThemeCardBack(CardTexture& back, DeckThemeId theme, int cardW, i
                         }
                     }
                 }
+            } else if (theme == DeckThemeId::Anime) {
+                // Crisp anime cardstock with midnight navy / luminous sapphire & gold celestial frame
+                r = 248; g = 250; b = 255;
+                if (x >= pad && x < cardW - pad && y >= pad && y < cardH - pad) {
+                    float t = ny;
+                    r = static_cast<uint8_t>(18.0f + 12.0f * t);
+                    g = static_cast<uint8_t>(24.0f + 16.0f * t);
+                    b = static_cast<uint8_t>(44.0f + 26.0f * t);
+
+                    float dEdgeX = std::min(x - pad, (cardW - pad) - x);
+                    float dEdgeY = std::min(y - pad, (cardH - pad) - y);
+                    if (dEdgeX <= 1.8f || dEdgeY <= 1.8f) {
+                        r = 255; g = 183; b = 3;
+                    }
+
+                    if (x >= padInner && x < cardW - padInner && y >= padInner && y < cardH - padInner) {
+                        float dInnerX = std::min(x - padInner, (cardW - padInner) - x);
+                        float dInnerY = std::min(y - padInner, (cardH - padInner) - y);
+                        if (dInnerX <= 1.0f || dInnerY <= 1.0f) {
+                            r = 58; g = 134; b = 255;
+                        }
+
+                        float cx = static_cast<float>(cardW) * 0.5f;
+                        float cy = static_cast<float>(cardH) * 0.5f;
+                        float dx = std::abs(static_cast<float>(x) - cx) / (static_cast<float>(cardW) * 0.18f);
+                        float dy = std::abs(static_cast<float>(y) - cy) / (static_cast<float>(cardH) * 0.18f);
+                        if (dx + dy <= 1.0f || (dx <= 0.2f && dy <= 0.7f) || (dy <= 0.2f && dx <= 0.7f)) {
+                            r = 255; g = 183; b = 3;
+                        }
+                    }
+                }
+            } else if (theme == DeckThemeId::Cyberpunk) {
+                // Dark obsidian cardstock with neon cyan brackets and hot magenta circuit trace
+                r = 12; g = 16; b = 23;
+                if (x >= pad && x < cardW - pad && y >= pad && y < cardH - pad) {
+                    float t = ny;
+                    r = static_cast<uint8_t>(10.0f + 6.0f * t);
+                    g = static_cast<uint8_t>(14.0f + 8.0f * t);
+                    b = static_cast<uint8_t>(25.0f + 16.0f * t);
+
+                    float dEdgeX = std::min(x - pad, (cardW - pad) - x);
+                    float dEdgeY = std::min(y - pad, (cardH - pad) - y);
+                    if (dEdgeX <= 1.8f || dEdgeY <= 1.8f) {
+                        r = 0; g = 240; b = 255;
+                    }
+
+                    if (x >= padInner && x < cardW - padInner && y >= padInner && y < cardH - padInner) {
+                        float dInnerX = std::min(x - padInner, (cardW - padInner) - x);
+                        float dInnerY = std::min(y - padInner, (cardH - padInner) - y);
+                        if (dInnerX <= 1.0f || dInnerY <= 1.0f) {
+                            r = 255; g = 0; b = 127;
+                        }
+
+                        float cx = static_cast<float>(cardW) * 0.5f;
+                        float cy = static_cast<float>(cardH) * 0.5f;
+                        float dx = std::abs(static_cast<float>(x) - cx) / (static_cast<float>(cardW) * 0.16f);
+                        float dy = std::abs(static_cast<float>(y) - cy) / (static_cast<float>(cardH) * 0.16f);
+                        if (dx + dy <= 1.0f && dx + dy >= 0.82f) {
+                            r = 0; g = 240; b = 255;
+                        } else if (dx + dy <= 0.45f) {
+                            r = 255; g = 230; b = 0;
+                        }
+                    }
+                }
             } else {
                 // Classic baize felt panel
                 r = 240; g = 232; b = 214;
@@ -208,6 +272,9 @@ const char* CardTextureCache::deckThemeName(DeckThemeId theme) noexcept {
     switch (theme) {
         case DeckThemeId::ClassicSvg:  return "CLASSIC";
         case DeckThemeId::SteampunkAi: return "STEAMPUNK";
+        case DeckThemeId::Anime:       return "ANIME";
+        case DeckThemeId::Cyberpunk:   return "CYBERPUNK";
+        case DeckThemeId::Custom:      return "CUSTOM";
         case DeckThemeId::Count:       return "DEFAULT";
     }
     return "UNKNOWN";
@@ -512,11 +579,64 @@ bool CardTextureCache::loadDeckTheme(DeckThemeId theme, int cardW, int cardH) {
         for (const auto& path : candidateSvgs) {
             if (loadSvgDeck(path, cardW, cardH)) return true;
         }
+    } else if (theme == DeckThemeId::Anime) {
+        const std::string candidateEats[] = {
+            "decks/anime.eats",
+            "/decks/anime.eats",
+            "/user/anime.eats",
+            "../decks/anime.eats",
+            "../../decks/anime.eats"
+        };
+        for (const auto& path : candidateEats) {
+            if (loadEatsDeck(path, cardW, cardH)) return true;
+        }
+        const std::string candidateBitmaps[] = {
+            "decks/anime.png",
+            "../decks/anime.png",
+            "../../decks/anime.png"
+        };
+        for (const auto& path : candidateBitmaps) {
+            if (loadBitmapDeck(path, cardW, cardH)) return true;
+        }
+        const std::string candidateSvgs[] = {
+            "decks/anime_svg.svg",
+            "../decks/anime_svg.svg",
+            "../../decks/anime_svg.svg"
+        };
+        for (const auto& path : candidateSvgs) {
+            if (loadSvgDeck(path, cardW, cardH)) return true;
+        }
+    } else if (theme == DeckThemeId::Cyberpunk) {
+        const std::string candidateEats[] = {
+            "decks/cyberpunk.eats",
+            "/decks/cyberpunk.eats",
+            "/user/cyberpunk.eats",
+            "../decks/cyberpunk.eats",
+            "../../decks/cyberpunk.eats"
+        };
+        for (const auto& path : candidateEats) {
+            if (loadEatsDeck(path, cardW, cardH)) return true;
+        }
+        const std::string candidateBitmaps[] = {
+            "decks/cyberpunk.png",
+            "../decks/cyberpunk.png",
+            "../../decks/cyberpunk.png"
+        };
+        for (const auto& path : candidateBitmaps) {
+            if (loadBitmapDeck(path, cardW, cardH)) return true;
+        }
+        const std::string candidateSvgs[] = {
+            "decks/cyberpunk_svg.svg",
+            "../decks/cyberpunk_svg.svg",
+            "../../decks/cyberpunk_svg.svg"
+        };
+        for (const auto& path : candidateSvgs) {
+            if (loadSvgDeck(path, cardW, cardH)) return true;
+        }
     }
 
-    // Fall back to classic SVG if themed SVG is missing
     if (theme != DeckThemeId::ClassicSvg) {
-        std::cout << "[SolEnshaded] Steampunk deck not found, falling back to classic SVG.\n";
+        std::cout << "[SolEnshaded] Themed deck not found, falling back to classic SVG.\n";
         return loadDeckTheme(DeckThemeId::ClassicSvg, cardW, cardH);
     }
 
@@ -526,11 +646,103 @@ bool CardTextureCache::loadDeckTheme(DeckThemeId theme, int cardW, int cardH) {
     return true;
 }
 
+bool CardTextureCache::loadDeckFromMemory(
+    const uint8_t* data,
+    size_t size,
+    const std::string& format,
+    int cardW,
+    int cardH,
+    DeckThemeId theme,
+    const std::string& cacheKey
+) {
+    if (!data || size == 0) return false;
+    cardW_ = cardW;
+    cardH_ = cardH;
+    currentTheme_ = theme;
+
+    std::string binPath;
+    if (!cacheKey.empty()) {
+        binPath = cacheKey;
+        size_t dotPos = binPath.rfind('.');
+        if (dotPos != std::string::npos) {
+            binPath.replace(dotPos, binPath.size() - dotPos, ".bin");
+        } else {
+            binPath += ".bin";
+        }
+        if (tryLoadBinaryCache(binPath, cacheKey, cardW, cardH, textures_)) {
+            syncArgb32AndMips(textures_);
+            isLoaded_ = true;
+            return true;
+        }
+    }
+
+    if (format == "svgz" || format == "svg_zlib" || format == "svg_deflate") {
+        int outLen = 0;
+        char* decomp = stbi_zlib_decode_malloc(reinterpret_cast<const char*>(data),
+                                               static_cast<int>(size), &outLen);
+        if (!decomp) {
+            decomp = stbi_zlib_decode_noheader_malloc(reinterpret_cast<const char*>(data),
+                                                      static_cast<int>(size), &outLen);
+        }
+        if (!decomp || outLen <= 0) {
+            std::cerr << "[SolEnshaded] Failed to decompress SVGZ payload\n";
+            return false;
+        }
+
+        std::vector<char> svgXml(decomp, decomp + outLen);
+        svgXml.push_back('\0');
+        free(decomp);
+
+        NSVGimage* image = nsvgParse(svgXml.data(), "px", 96.0f);
+        if (!image) {
+            std::cerr << "[SolEnshaded] Failed to parse decompressed SVG deck\n";
+            return false;
+        }
+
+        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
+        return isLoaded_;
+    } else if (format == "svg") {
+        std::vector<char> svgXml(data, data + size);
+        svgXml.push_back('\0');
+
+        NSVGimage* image = nsvgParse(svgXml.data(), "px", 96.0f);
+        if (!image) {
+            std::cerr << "[SolEnshaded] Failed to parse SVG deck\n";
+            return false;
+        }
+
+        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
+        return isLoaded_;
+    } else if (format == "png" || format == "bitmap") {
+        int sheetW = 0, sheetH = 0, channels = 0;
+        stbi_uc* sheetData = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(data),
+                                                  static_cast<int>(size),
+                                                  &sheetW, &sheetH, &channels, 4);
+        if (!sheetData) {
+            std::cerr << "[SolEnshaded] Failed to decode PNG deck: " << stbi_failure_reason() << "\n";
+            return false;
+        }
+
+        isLoaded_ = processDecodedSheet(sheetData, sheetW, sheetH, cardW, cardH, textures_, currentTheme_, binPath);
+        stbi_image_free(sheetData);
+        return isLoaded_;
+    }
+
+    std::cerr << "[SolEnshaded] Unknown deck format: " << format << "\n";
+    return false;
+}
+
 bool CardTextureCache::loadEatsDeck(const std::string& eatsFilePath, int cardW, int cardH) {
-    if (eatsFilePath.find("steampunk") != std::string::npos) {
+    if (eatsFilePath.find("cyberpunk") != std::string::npos) {
+        currentTheme_ = DeckThemeId::Cyberpunk;
+    } else if (eatsFilePath.find("anime") != std::string::npos) {
+        currentTheme_ = DeckThemeId::Anime;
+    } else if (eatsFilePath.find("steampunk") != std::string::npos) {
         currentTheme_ = DeckThemeId::SteampunkAi;
     } else if (eatsFilePath.find("classic") != std::string::npos) {
         currentTheme_ = DeckThemeId::ClassicSvg;
+    } else {
+        currentTheme_ = DeckThemeId::Custom;
     }
 
     std::string binPath = eatsFilePath;
@@ -573,39 +785,109 @@ bool CardTextureCache::loadEatsDeck(const std::string& eatsFilePath, int cardW, 
         }
     }
 
-    // Evaluate script metadata
+    // Evaluate script with API bindings
     eatsbits::eatscript::Evaluator evaluator;
+    bool apiCalled = false;
+    std::vector<uint8_t> apiBlob;
+    std::string apiFormat = "svgz";
+    int apiCardW = cardW;
+    int apiCardH = cardH;
+
+    auto setDeckFn = [&](const std::vector<eatsbits::eatscript::Value>& args,
+                         const std::map<std::string, eatsbits::eatscript::Value>& kwargs) -> eatsbits::eatscript::Value {
+        apiCalled = true;
+        std::string rawStr;
+        if (!args.empty() && args[0].isString()) {
+            rawStr = args[0].asString();
+        } else if (kwargs.find("blob") != kwargs.end()) {
+            rawStr = kwargs.at("blob").asString();
+        }
+
+        if (rawStr.rfind("data:", 0) == 0) {
+            auto parsed = eatsbits::ui::parseDataUri(rawStr);
+            if (parsed && !parsed->data.empty()) {
+                apiBlob = std::move(parsed->data);
+                if (parsed->mimeType.find("svg") != std::string::npos) apiFormat = "svg";
+                else if (parsed->mimeType.find("png") != std::string::npos) apiFormat = "png";
+            }
+        }
+        if (apiBlob.empty() && !rawStr.empty()) {
+            apiBlob = eatsbits::ui::base64Decode(rawStr);
+            if (apiBlob.empty()) {
+                apiBlob.assign(rawStr.begin(), rawStr.end());
+            }
+        }
+
+        const eatsbits::eatscript::Value* optsDict = nullptr;
+        if (args.size() > 1 && args[1].isDict()) {
+            optsDict = &args[1];
+        }
+
+        auto getOptString = [&](const std::string& key, const std::string& defVal) {
+            if (kwargs.find(key) != kwargs.end()) return kwargs.at(key).asString();
+            if (optsDict && optsDict->hasKey(key)) return optsDict->get(key).asString();
+            return defVal;
+        };
+        auto getOptInt = [&](const std::string& key, int defVal) {
+            if (kwargs.find(key) != kwargs.end()) return kwargs.at(key).asInt(defVal);
+            if (optsDict && optsDict->hasKey(key)) return optsDict->get(key).asInt(defVal);
+            return defVal;
+        };
+
+        apiFormat = getOptString("format", apiFormat);
+        apiCardW = getOptInt("card_w", apiCardW);
+        apiCardH = getOptInt("card_h", apiCardH);
+
+        return eatsbits::eatscript::Value(true);
+    };
+
+    auto themeDummyFn = [](const auto&, const auto&) { return eatsbits::eatscript::Value(true); };
+    evaluator.setVariable("sol", eatsbits::eatscript::Value(std::map<std::string, eatsbits::eatscript::Value>{}));
+    evaluator.registerMemberFunction("sol", "create_theme", themeDummyFn);
+    evaluator.registerMemberFunction("sol", "set_theme", themeDummyFn);
+    evaluator.registerMemberFunction("sol", "set_deck", setDeckFn);
+    evaluator.registerFunction("create_theme", themeDummyFn);
+    evaluator.registerFunction("set_theme", themeDummyFn);
+    evaluator.registerFunction("set_deck", setDeckFn);
+
     evaluator.evaluateSource(scriptPart);
 
-    std::string format = "svgz";
-    if (evaluator.hasVariable("format")) {
-        format = evaluator.getVariable("format").asString();
-    } else if (evaluator.hasVariable("deck_format")) {
-        format = evaluator.getVariable("deck_format").asString();
-    }
-
-    if (evaluator.hasVariable("card_w")) {
-        cardW = static_cast<int>(evaluator.getVariable("card_w").asNumber());
-    }
-    if (evaluator.hasVariable("card_h")) {
-        cardH = static_cast<int>(evaluator.getVariable("card_h").asNumber());
-    }
-
-    // Extract binary payload
     std::vector<uint8_t> rawBytes;
-    if (!blobPart.empty()) {
-        rawBytes.assign(blobPart.begin(), blobPart.end());
+    std::string format = "svgz";
+
+    if (apiCalled && !apiBlob.empty()) {
+        rawBytes = std::move(apiBlob);
+        format = apiFormat;
+        cardW = apiCardW;
+        cardH = apiCardH;
     } else {
-        std::string blobStr;
-        if (evaluator.hasVariable("deck_blob")) {
-            blobStr = evaluator.getVariable("deck_blob").asString();
-        } else if (evaluator.hasVariable("blob")) {
-            blobStr = evaluator.getVariable("blob").asString();
+        if (evaluator.hasVariable("format")) {
+            format = evaluator.getVariable("format").asString();
+        } else if (evaluator.hasVariable("deck_format")) {
+            format = evaluator.getVariable("deck_format").asString();
         }
-        if (!blobStr.empty()) {
-            rawBytes = eatsbits::ui::base64Decode(blobStr);
-            if (rawBytes.empty() && format == "svg") {
-                rawBytes.assign(blobStr.begin(), blobStr.end());
+
+        if (evaluator.hasVariable("card_w")) {
+            cardW = static_cast<int>(evaluator.getVariable("card_w").asNumber());
+        }
+        if (evaluator.hasVariable("card_h")) {
+            cardH = static_cast<int>(evaluator.getVariable("card_h").asNumber());
+        }
+
+        if (!blobPart.empty()) {
+            rawBytes.assign(blobPart.begin(), blobPart.end());
+        } else {
+            std::string blobStr;
+            if (evaluator.hasVariable("deck_blob")) {
+                blobStr = evaluator.getVariable("deck_blob").asString();
+            } else if (evaluator.hasVariable("blob")) {
+                blobStr = evaluator.getVariable("blob").asString();
+            }
+            if (!blobStr.empty()) {
+                rawBytes = eatsbits::ui::base64Decode(blobStr);
+                if (rawBytes.empty() && format == "svg") {
+                    rawBytes.assign(blobStr.begin(), blobStr.end());
+                }
             }
         }
     }
@@ -615,63 +897,7 @@ bool CardTextureCache::loadEatsDeck(const std::string& eatsFilePath, int cardW, 
         return false;
     }
 
-    cardW_ = cardW;
-    cardH_ = cardH;
-
-    if (format == "svgz" || format == "svg_zlib" || format == "svg_deflate") {
-        int outLen = 0;
-        char* decomp = stbi_zlib_decode_malloc(reinterpret_cast<const char*>(rawBytes.data()),
-                                               static_cast<int>(rawBytes.size()), &outLen);
-        if (!decomp) {
-            decomp = stbi_zlib_decode_noheader_malloc(reinterpret_cast<const char*>(rawBytes.data()),
-                                                      static_cast<int>(rawBytes.size()), &outLen);
-        }
-        if (!decomp || outLen <= 0) {
-            std::cerr << "[SolEnshaded] Failed to decompress SVGZ payload in " << eatsFilePath << "\n";
-            return false;
-        }
-
-        std::vector<char> svgXml(decomp, decomp + outLen);
-        svgXml.push_back('\0');
-        free(decomp);
-
-        NSVGimage* image = nsvgParse(svgXml.data(), "px", 96.0f);
-        if (!image) {
-            std::cerr << "[SolEnshaded] Failed to parse decompressed SVG in " << eatsFilePath << "\n";
-            return false;
-        }
-
-        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
-        return isLoaded_;
-    } else if (format == "svg") {
-        std::vector<char> svgXml(rawBytes.begin(), rawBytes.end());
-        svgXml.push_back('\0');
-
-        NSVGimage* image = nsvgParse(svgXml.data(), "px", 96.0f);
-        if (!image) {
-            std::cerr << "[SolEnshaded] Failed to parse SVG in " << eatsFilePath << "\n";
-            return false;
-        }
-
-        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
-        return isLoaded_;
-    } else if (format == "png") {
-        int sheetW = 0, sheetH = 0, channels = 0;
-        stbi_uc* sheetData = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(rawBytes.data()),
-                                                  static_cast<int>(rawBytes.size()),
-                                                  &sheetW, &sheetH, &channels, 4);
-        if (!sheetData) {
-            std::cerr << "[SolEnshaded] Failed to decode PNG in " << eatsFilePath << ": " << stbi_failure_reason() << "\n";
-            return false;
-        }
-
-        isLoaded_ = processDecodedSheet(sheetData, sheetW, sheetH, cardW, cardH, textures_, currentTheme_, binPath);
-        stbi_image_free(sheetData);
-        return isLoaded_;
-    }
-
-    std::cerr << "[SolEnshaded] Unknown deck format: " << format << " in " << eatsFilePath << "\n";
-    return false;
+    return loadDeckFromMemory(rawBytes.data(), rawBytes.size(), format, cardW, cardH, currentTheme_, binPath);
 }
 
 bool CardTextureCache::loadBitmapDeck(const std::string& bitmapFilePath, int cardW, int cardH) {

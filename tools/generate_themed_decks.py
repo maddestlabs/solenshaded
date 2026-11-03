@@ -100,6 +100,17 @@ HARDWOOD_BORDER = """
                 <circle cx="704" cy="1004" r="4" style="fill:#8b261e;"/>
 """
 
+ANIME_BORDER = """
+                <!-- Modern Anime Geometric Framing & Radiant Corner Stars -->
+                <path d="M 36,36 L 714,36 L 714,1014 L 36,1014 Z" style="fill:none;stroke:#2b3a55;stroke-width:2.5;stroke-opacity:0.85;"/>
+                <path d="M 46,46 L 704,46 L 704,1004 L 46,1004 Z" style="fill:none;stroke:#3a86ff;stroke-width:1.2;stroke-opacity:0.5;"/>
+                <!-- Anime Corner Star Sparks -->
+                <polygon points="46,40 48,44 52,46 48,48 46,52 44,48 40,46 44,44" style="fill:#ffb703;"/>
+                <polygon points="704,40 706,44 710,46 706,48 704,52 702,48 698,46 702,44" style="fill:#ffb703;"/>
+                <polygon points="46,1000 48,1004 52,1006 48,1008 46,1012 44,1008 40,1006 44,1004" style="fill:#ffb703;"/>
+                <polygon points="704,1000 706,1004 710,1006 706,1008 704,1012 702,1008 698,1006 702,1004" style="fill:#ffb703;"/>
+"""
+
 THEMES = [
     {
         "name": "Cyberpunk Neon",
@@ -130,6 +141,16 @@ THEMES = [
         "court_gold": "#c8963e",     # Brass gold
         "court_blue": "#1d3557",     # Classic Prussian navy
         "border_svg": HARDWOOD_BORDER
+    },
+    {
+        "name": "Anime Celestia",
+        "file": "decks/anime_svg.svg",
+        "card_bg": "#f8faff",
+        "black_fill": "#161b26",     # Obsidian midnight for Spades/Clubs
+        "red_fill": "#e60033",       # Radiant anime ruby crimson for Hearts/Diamonds
+        "court_gold": "#ffb703",     # Luminous anime gold
+        "court_blue": "#3a86ff",     # Royal anime azure
+        "border_svg": ANIME_BORDER
     }
 ]
 

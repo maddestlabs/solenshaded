@@ -164,19 +164,7 @@ def get_card_prompt(name, theme):
 
     rank_label = RANK_LABELS.get(rank_key, rank_key.upper())
     suit_sym = SUIT_SYMBOLS.get(suit, suit)
-
-    if "king" in name:
-        subject = f"Monarch King of {suit.capitalize()} wearing noble royal {theme} attire, holding a ceremonial scepter, clockwork gears or arcane details"
-    elif "queen" in name:
-        subject = f"Queen of {suit.capitalize()} in noble royal {theme} gown, diadems, gears or sigils, intricate filigree"
-    elif "jack" in name:
-        subject = f"Young Jack knight or navigator of {suit.capitalize()} with {theme} gadgets, goggles or weapons, and ornate collar"
-    elif "ace" in name:
-        subject = f"Monumental central ornate {suit.capitalize()} ace crest with {theme} mechanical details, flourish and symmetry"
-    elif "joker" in name:
-        subject = f"Court jester / mechanist in wild {theme} attire juggling gears, steam valves or arcane sparks"
-    else:
-        subject = f"Standard playing card layout with {rank_label} of {suit.capitalize()} with {suit_sym} pips and vintage engraved {theme} accents"
+    theme_lower = theme.lower()
 
     indices_instruction = ""
     if suit in SUIT_SYMBOLS:
@@ -185,20 +173,153 @@ def get_card_prompt(name, theme):
             f"and matching 180-degree inverted rank '{rank_label}' and {suit_sym} pip in the bottom-right corner. "
         )
 
-    color_rule = ""
-    if suit in ("hearts", "diamonds"):
-        color_rule = (
-            f"VIVID RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
-            f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
-            f"and all primary suit symbols MUST be bright, vivid crimson red (#c8102e / #d01828). "
-            f"Do NOT make the symbols black, brown, brass, gold, or dark monochrome. "
-            f"The red must be unmistakable, bold, and high-contrast against the antique parchment. "
+    if "anime" in theme_lower or "manga" in theme_lower:
+        # Specialized vibrant anime/manga prompt builder
+        if "king" in name:
+            subject = (
+                f"Charismatic anime King and emperor of {suit.capitalize()} with sharp expressive eyes, stylish flowing hair, "
+                f"regal commander armor with cape, holding a glowing anime broadsword or royal scepter with {suit_sym} crest, "
+                f"majestic anime aura"
+            )
+        elif "queen" in name:
+            subject = (
+                f"Gorgeous anime Queen and sorceress of {suit.capitalize()} with large sparkling anime eyes, long flowing twin-tail or braided hair, "
+                f"ornate magical princess gown with {suit_sym} accents and glowing ribbons, celestial sparkle aura"
+            )
+        elif "jack" in name:
+            subject = (
+                f"Dashing youthful anime hero knight or rogue of {suit.capitalize()} with spiky anime hair, confident smirk, "
+                f"stylish anime fantasy adventurer jacket and gauntlets, wielding a sleek rapier or kunai dagger with {suit_sym} charm"
+            )
+        elif "ace" in name:
+            subject = (
+                f"Monumental glowing anime summoning circle and monumental {suit.capitalize()} crest, luminous geometric magic runes, "
+                f"crystalline {suit_sym} emblem, symmetrical celestial anime energy flourish"
+            )
+        elif "joker" in name:
+            subject = (
+                f"Mischievous anime trickster / kitsune jester with fox ears or stylized cat mask, colorful twin-tone hair, playful grin, "
+                f"juggling floating glowing poker cards and elemental spirit wisps"
+            )
+        else:
+            subject = (
+                f"Standard playing card layout with {rank_label} of {suit.capitalize()} featuring crisp stylized anime geometric pips ({suit_sym}), "
+                f"sleek modern anime energy border accents, clean vibrant card aesthetic"
+            )
+
+        if suit in ("hearts", "diamonds"):
+            color_rule = (
+                f"VIVID RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
+                f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
+                f"and all primary suit symbols MUST be bright, vivid radiant ruby crimson (#E60033 / #FF1744) with crisp white or gold highlights. "
+                f"Do NOT make the symbols black or dark monochrome. The red must be unmistakable, bold, and high-contrast. "
+            )
+        elif suit in ("spades", "clubs"):
+            color_rule = (
+                f"BLACK SUIT COLOR REQUIREMENT: This is a BLACK suit ({suit.capitalize()}). "
+                f"The corner rank '{rank_label}', corner {suit_sym} pip, and primary suit symbols MUST be deep solid obsidian midnight-black (#111111 / #0F172A) "
+                f"with sleek silver or sapphire accents. "
+            )
+        else:
+            color_rule = "Vibrant multi-color anime palette with distinct contrast. "
+
+        art_style = (
+            f"Vibrant high-quality modern Japanese anime and manga illustration style, crisp clean cel-shaded outlines, "
+            f"bold solid color fills, smooth cel shading, dynamic anime lighting, clean ivory cardstock background, "
+            f"no blur, no photographic realism, no woodblock texture, edge-to-edge card layout."
         )
-    elif suit in ("spades", "clubs"):
-        color_rule = (
-            f"BLACK SUIT COLOR REQUIREMENT: This is a BLACK suit ({suit.capitalize()}). "
-            f"The corner rank '{rank_label}', corner {suit_sym} pip, and primary suit symbols MUST be deep solid charcoal-black (#111111). "
-            f"Accented with antique copper and brass metallic details. "
+
+    elif "cyberpunk" in theme_lower or "synthwave" in theme_lower or "neon" in theme_lower:
+        # Specialized vibrant Cyberpunk / Synthwave prompt builder
+        if "king" in name:
+            subject = (
+                f"Futuristic Cyberpunk corporate megacorp executive / tech syndicate warlord King of {suit.capitalize()} "
+                f"with glowing neural cyberware implants, chrome cybernetic augments, high-collar LED trench coat, "
+                f"holding a holographic glowing cyber-blade or data pad with {suit_sym} insignia, neon-lit high-tech aesthetic"
+            )
+        elif "queen" in name:
+            subject = (
+                f"High-tech Cyberpunk netrunner queen / cyber-enchantress of {suit.capitalize()} with neon-streaked hair, "
+                f"glowing ocular visor implants, sleek carbon-fiber armor dress with luminous fiber-optic circuit traces "
+                f"and floating holographic {suit_sym} interfaces"
+            )
+        elif "jack" in name:
+            subject = (
+                f"Streetwise Cyberpunk mercenary / street samurai rogue of {suit.capitalize()} with cybernetic arm, "
+                f"holographic augmented reality HUD eyewear, neon jacket, wielding twin thermal monoblades or smart weapon with {suit_sym} decal"
+            )
+        elif "ace" in name:
+            subject = (
+                f"Monumental glowing holographic {suit.capitalize()} ace crest, neon vector wireframe grid, glowing laser circuitry, "
+                f"crystalline cyber {suit_sym} core, high-tech isometric cybernetic flourish"
+            )
+        elif "joker" in name:
+            subject = (
+                f"Wild Cyberpunk renegade glitch hacker / neon court jester in techwear with AR hologram joker mask, "
+                f"holographic glowing tarot cards, electrical arc sparks, and neon chromatic glitch accents"
+            )
+        else:
+            subject = (
+                f"Standard playing card layout with {rank_label} of {suit.capitalize()} featuring glowing high-tech neon laser pips ({suit_sym}), "
+                f"sleek tech-bracket cyber border accents, clean dark obsidian card aesthetic"
+            )
+
+        if suit in ("hearts", "diamonds"):
+            color_rule = (
+                f"VIVID RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
+                f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
+                f"and all primary suit symbols MUST be ultra-vivid radiant laser neon magenta-red (#FF0055 / #FF007F) with glowing hot-pink highlights. "
+                f"Do NOT make the symbols blue, cyan, or dark monochrome. The red must be unmistakable, bold, and high-contrast. "
+            )
+        elif suit in ("spades", "clubs"):
+            color_rule = (
+                f"ELECTRIC CYAN SUIT COLOR REQUIREMENT (HIGH-CONTRAST PLAYABILITY): "
+                f"This is a BLACK suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
+                f"and primary suit symbols MUST be brilliant electric cyber-cyan (#00F0FF / #00D2FF) with sleek chrome and neon-blue circuit traces "
+                f"against deep obsidian dark cardstock (#0A0E17). "
+            )
+        else:
+            color_rule = "Vibrant electric neon palette with high contrast against dark cardstock. "
+
+        art_style = (
+            f"Crisp graphic Cyberpunk vector illustration, bold clean outlines, vibrant solid neon laser colors, sleek cel-shading, "
+            f"high-contrast lighting against dark obsidian tech cardstock, no blur, no realistic photo noise, edge-to-edge card layout."
+        )
+
+    else:
+        # Default / Victorian Steampunk prompt builder
+        if "king" in name:
+            subject = f"Monarch King of {suit.capitalize()} wearing noble royal {theme} attire, holding a ceremonial scepter, clockwork gears or arcane details"
+        elif "queen" in name:
+            subject = f"Queen of {suit.capitalize()} in noble royal {theme} gown, diadems, gears or sigils, intricate filigree"
+        elif "jack" in name:
+            subject = f"Young Jack knight or navigator of {suit.capitalize()} with {theme} gadgets, goggles or weapons, and ornate collar"
+        elif "ace" in name:
+            subject = f"Monumental central ornate {suit.capitalize()} ace crest with {theme} mechanical details, flourish and symmetry"
+        elif "joker" in name:
+            subject = f"Court jester / mechanist in wild {theme} attire juggling gears, steam valves or arcane sparks"
+        else:
+            subject = f"Standard playing card layout with {rank_label} of {suit.capitalize()} with {suit_sym} pips and vintage engraved {theme} accents"
+
+        color_rule = ""
+        if suit in ("hearts", "diamonds"):
+            color_rule = (
+                f"VIVID RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
+                f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
+                f"and all primary suit symbols MUST be bright, vivid crimson red (#c8102e / #d01828). "
+                f"Do NOT make the symbols black, brown, brass, gold, or dark monochrome. "
+                f"The red must be unmistakable, bold, and high-contrast against the antique parchment. "
+            )
+        elif suit in ("spades", "clubs"):
+            color_rule = (
+                f"BLACK SUIT COLOR REQUIREMENT: This is a BLACK suit ({suit.capitalize()}). "
+                f"The corner rank '{rank_label}', corner {suit_sym} pip, and primary suit symbols MUST be deep solid charcoal-black (#111111). "
+                f"Accented with antique copper and brass metallic details. "
+            )
+
+        art_style = (
+            f"Crisp graphic woodblock engraving and copperplate linework, bold clean outlines, solid colors, "
+            f"on clean antique parchment cardstock background, no external drop shadows, edge-to-edge card layout."
         )
 
     return (
@@ -207,8 +328,7 @@ def get_card_prompt(name, theme):
         f"{indices_instruction}"
         f"{color_rule}"
         f"Central artwork: {subject}. "
-        f"Art style: Crisp graphic woodblock engraving and copperplate linework, bold clean outlines, solid colors, "
-        f"on clean antique parchment cardstock background, no external drop shadows, edge-to-edge card layout."
+        f"Art style: {art_style}"
     )
 
 def generate_prompts(args):
@@ -265,51 +385,59 @@ def _generate_single_card(card_name, client, model_name, theme, png_dir, svg_dir
     contents.append(prompt_text)
 
     print(f"[{idx+1}/{total_cards}] Requesting: {card_name} ...")
-    try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=contents
-        )
-
-        img_bytes = None
-        if response.candidates and response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
-                if part.inline_data and part.inline_data.data:
-                    img_bytes = part.inline_data.data
-                    break
-
-        if img_bytes:
-            with open(png_out, "wb") as pf:
-                pf.write(img_bytes)
-            print(f"  -> Saved raw PNG for {card_name} ({len(img_bytes)} bytes)")
-
-            # Resize to standard 750x1050 card dimensions and quantize colors
-            raw_img = Image.open(png_out).convert("RGB")
-            resized_img = raw_img.resize((750, 1050), Image.Resampling.LANCZOS)
-            quantized = resized_img.quantize(colors=16, method=Image.Quantize.FASTOCTREE).convert("RGB")
-            proc_png = os.path.join(png_dir, f"{card_name}_proc.png")
-            quantized.save(proc_png, "PNG")
-
-            # Vectorize to clean SVG via vtracer
-            vtracer.convert_image_to_svg_py(
-                proc_png,
-                svg_out,
-                colormode="color",
-                filter_speckle=16,
-                corner_threshold=65,
-                length_threshold=6.0,
-                max_iterations=10,
-                splice_threshold=45
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents
             )
-            print(f"  -> Vectorized {card_name} SVG ({os.path.getsize(svg_out)} bytes)")
-            return True
-        else:
-            print(f"  -> No image data returned for {card_name}")
-            return False
 
-    except Exception as e:
-        print(f"  -> Error generating {card_name}: {e}")
-        return False
+            img_bytes = None
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data and part.inline_data.data:
+                        img_bytes = part.inline_data.data
+                        break
+
+            if img_bytes:
+                with open(png_out, "wb") as pf:
+                    pf.write(img_bytes)
+                print(f"  -> Saved raw PNG for {card_name} ({len(img_bytes)} bytes)")
+
+                # Resize to standard 750x1050 card dimensions and quantize colors
+                raw_img = Image.open(png_out).convert("RGB")
+                resized_img = raw_img.resize((750, 1050), Image.Resampling.LANCZOS)
+                quantized = resized_img.quantize(colors=16, method=Image.Quantize.FASTOCTREE).convert("RGB")
+                proc_png = os.path.join(png_dir, f"{card_name}_proc.png")
+                quantized.save(proc_png, "PNG")
+
+                # Vectorize to clean SVG via vtracer
+                vtracer.convert_image_to_svg_py(
+                    proc_png,
+                    svg_out,
+                    colormode="color",
+                    filter_speckle=16,
+                    corner_threshold=65,
+                    length_threshold=6.0,
+                    max_iterations=10,
+                    splice_threshold=45
+                )
+                print(f"  -> Vectorized {card_name} SVG ({os.path.getsize(svg_out)} bytes)")
+                return True
+            else:
+                print(f"  -> No image data returned for {card_name} (attempt {attempt+1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(3)
+
+        except Exception as e:
+            print(f"  -> Error generating {card_name} (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 5
+                print(f"     Backing off for {wait_time}s before retry...")
+                time.sleep(wait_time)
+
+    return False
 
 def generate_ai_cards(args):
     if not HAS_GENAI:

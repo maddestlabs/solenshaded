@@ -73,6 +73,22 @@ public:
     bool loadCustomEatsTheme(const std::string& eatsFilePath);
 
     /**
+     * Load a custom background theme directly from memory buffer (EBKG container or image).
+     */
+    bool loadCustomThemeFromMemory(
+        const uint8_t* blobData,
+        size_t blobSize,
+        float uvScale = 2.0f,
+        float normalStrength = 1.35f,
+        float specularIntensity = 0.65f,
+        float ambientLevel = 0.22f,
+        float diffuseLevel = 0.88f,
+        float tintR = 1.0f,
+        float tintG = 1.0f,
+        float tintB = 1.0f
+    );
+
+    /**
      * Clear any loaded custom .eats theme and return to the active TableThemeId theme.
      */
     void clearCustomEatsTheme() noexcept;
