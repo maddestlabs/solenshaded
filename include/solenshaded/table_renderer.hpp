@@ -10,6 +10,16 @@
 namespace solenshaded {
 
 /**
+ * Screen anchor position for the consolidated floating hover menu.
+ */
+enum class MenuAnchor : uint8_t {
+    BottomLeft = 0,
+    BottomRight = 1,
+    TopLeft = 2,
+    TopRight = 3
+};
+
+/**
  * 100% Procedural Hardwood 3.0 & Enshaded Solitaire Renderer.
  * Synthesizes carved hardwood frames, baize/obsidian surfaces, directional drop shadows,
  * parchment cards, 2.5D card flips, vector suit pips, geometric card backs, and interactive HUD chrome.
@@ -28,7 +38,14 @@ public:
         int draggedCardIdx = -1,
         float dragOffsetX = 0.0f,
         float dragOffsetY = 0.0f,
-        int hoveredButtonId = -1
+        int hoveredButtonId = -1,
+        bool menuOpen = false,
+        MenuAnchor menuAnchor = MenuAnchor::BottomLeft,
+        bool isGesturing = false,
+        float gestureStartX = 0.0f,
+        float gestureStartY = 0.0f,
+        float gestureCurX = 0.0f,
+        float gestureCurY = 0.0f
     );
 
     static bool renderToPng(

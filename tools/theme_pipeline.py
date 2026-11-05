@@ -410,6 +410,15 @@ def cmd_info(args):
         marker_pos = data.find(marker)
 
     if marker_pos == -1:
+        text = data.decode("utf-8", errors="replace")
+        if "proctex.canvas" in text or "background.create" in text or theme_path.suffix == ".eat":
+            print("=" * 60)
+            print(f"Eatscript Procedural Theme: {theme_path.name} ({len(data):,} bytes)")
+            print("Mode: Pure CPU Procedural Synthesis (Zero Heavy Bitmaps)")
+            print("=" * 60)
+            print(text.strip())
+            print("=" * 60)
+            return
         print("[Error] No __BLOB__ marker found in .eats file.")
         return
 
@@ -446,6 +455,38 @@ def cmd_info(args):
     inspect_img("Normal", n_off, n_sz)
     inspect_img("ORM (Packed)", o_off, o_sz)
     print("=" * 60)
+
+def cmd_pack_procedural(args):
+    eat_path = Path(args.script)
+    if not eat_path.exists():
+        print(f"[Error] Procedural script '{eat_path}' does not exist.")
+        return
+
+    with open(eat_path, "r", encoding="utf-8") as f:
+        script_code = f.read()
+
+    out_path = Path(args.output) if args.output else eat_path.with_suffix(".eats")
+    name = args.name or eat_path.stem.replace("_", " ").title()
+
+    recipe_header = f"""# SolEnshaded Procedural Background Theme Package
+# Synthesized at runtime via Eatscript proctex API (Zero heavy PNG textures)
+
+sol.set_theme({{
+    id: "{eat_path.stem}",
+    name: "{name}",
+    author: "{args.author}",
+    description: "{args.description or 'Dynamic procedural PBR surface'}",
+    version: 1,
+    procedural: true
+}})
+
+# --- Procedural Synthesis Script ---
+{script_code}
+"""
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(recipe_header)
+
+    print(f"[SolEnshaded] Successfully packaged procedural theme: {out_path} ({len(recipe_header):,} bytes)")
 
 def cmd_unpack(args):
     theme_path = Path(args.file)
@@ -514,6 +555,14 @@ def main():
     info_p = subparsers.add_parser("info", help="Inspect .eats background theme header & payload")
     info_p.add_argument("file", help="Path to .eats theme file")
 
+    # Pack procedural command
+    proc_p = subparsers.add_parser("pack-procedural", help="Pack an .eat script into a lightweight .eats theme")
+    proc_p.add_argument("-s", "--script", required=True, help="Path to .eat procedural texture script")
+    proc_p.add_argument("-o", "--output", help="Output .eats path")
+    proc_p.add_argument("--name", help="Display name for the theme")
+    proc_p.add_argument("--author", default="SolEnshaded / Eatscript", help="Author attribution")
+    proc_p.add_argument("--description", help="Theme description")
+
     # Unpack command
     unpack_p = subparsers.add_parser("unpack", help="Unpack .eats theme to loose images and recipe")
     unpack_p.add_argument("file", help="Path to .eats theme file")
@@ -526,6 +575,8 @@ def main():
         cmd_batch_pack(args)
     elif args.command == "info":
         cmd_info(args)
+    elif args.command == "pack-procedural":
+        cmd_pack_procedural(args)
     elif args.command == "unpack":
         cmd_unpack(args)
 

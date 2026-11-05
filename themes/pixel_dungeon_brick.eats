@@ -1,0 +1,38 @@
+# SolEnshaded Procedural Background Theme Package
+# Synthesized at runtime via Eatscript proctex API (Zero heavy PNG textures)
+
+sol.set_theme({
+    id: "pixel_dungeon_brick",
+    name: "Pixel Dungeon Brick",
+    author: "SolEnshaded / Eatscript",
+    description: "Retro 16x16 dungeon cobble brick wall quantized to Endesga32 with Bayer dithering",
+    version: 1,
+    procedural: true
+})
+
+# --- Procedural Synthesis Script ---
+# Retro 16x16 Dungeon Cobble Brick Wall (Quantized to Endesga32 with Bayer Dither)
+tex = proctex.canvas(width=512, height=512, seed=1616, seamless=true)
+
+# 1. Coarse brick layout + chipped stone noise
+bricks = tex.brick_grid(cols=2, rows=4, mortar_width=0.10, bevel_width=0.14, row_offset=0.5, height_variance=0.35, slope_variance=0.22)
+stone_noise = tex.fbm(scale_x=6.0, scale_y=6.0, octaves=3, persistence=0.5, seed_offset=33)
+chipped = tex.slope_blur(bricks, stone_noise, strength=0.04, samples=4, mode="min")
+height = tex.blend(chipped, stone_noise, mode="overlay", weight=0.28)
+
+# 2. High-contrast dungeon slate palette before pixelation
+albedo = tex.gradient_map(height, [
+    [0.00, "#181425"],
+    [0.25, "#262b44"],
+    [0.55, "#3a4466"],
+    [0.82, "#5a6988"],
+    [1.00, "#8b9bb4"]
+])
+
+lit = tex.shade_pbr(albedo, height, roughness=0.75, normal_strength=4.5, ao_intensity=1.5, light_azimuth_deg=125.0, light_elevation_deg=45.0)
+
+# 3. Quantize to 16x16 pixel art grid with Endesga32 palette & Bayer 4x4 dithering, upscaled to 512x512 crisp pixels
+retro = tex.pixel_art(lit, target_w=16, target_h=16, palette="endesga32", dither="bayer4x4", dither_strength=0.28, upscale_to_canvas=true)
+tex.output(retro)
+tex.output_pbr(retro, height, roughness=0.75, normal_strength=3.0)
+

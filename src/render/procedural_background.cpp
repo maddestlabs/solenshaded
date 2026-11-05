@@ -239,183 +239,7 @@ void renderStripedJersey(
 }
 
 // ----------------------------------------------------------------------------
-// 5. Glazed Reflective Subway Ceramic Tile
-// ----------------------------------------------------------------------------
-void renderReflectiveTile(
-    eatsbits::ui::BatchRenderer2D& r,
-    float x, float y, float w, float h,
-    const eatsbits::ui::LightSource2D& light,
-    uint32_t seed
-) {
-    (void)seed;
-    // 1. Deep glazed cobalt/navy base
-    r.drawRectGradient(x, y, w, h, 0.10f, 0.15f, 0.22f, 0.05f, 0.08f, 0.13f, 1.0f);
-
-    eatsbits::ui::ScissorScope scissor(&r, x, y, w, h);
-
-    // 2. Beveled Ceramic Subway Tiles (96 x 48)
-    const float tileW = 96.0f;
-    const float tileH = 48.0f;
-    int row = 0;
-    for (float ty = y; ty < y + h; ty += tileH, ++row) {
-        float xOff = (row % 2 == 1) ? (tileW * 0.5f) : 0.0f;
-        for (float tx = x - tileW + xOff; tx < x + w + tileW; tx += tileW) {
-            // Tile face
-            r.drawRoundedRect(tx + 2.0f, ty + 2.0f, tileW - 4.0f, tileH - 4.0f, 3.5f,
-                              0.14f, 0.20f, 0.30f, 0.95f, 4);
-            // Glaze top/left specular rim
-            r.drawRoundedRectOutline(tx + 2.0f, ty + 2.0f, tileW - 4.0f, tileH - 4.0f, 3.5f,
-                                     0.28f, 0.40f, 0.55f, 0.65f, 1.2f, 4);
-            // Grout recession shadow
-            r.drawRect(tx, ty, tileW, 2.0f, 0.04f, 0.06f, 0.09f, 0.85f);
-            r.drawRect(tx, ty, 2.0f, tileH, 0.04f, 0.06f, 0.09f, 0.85f);
-        }
-    }
-
-    // 3. Specular Highlight Hotspot (Luminous reflection pool directly beneath chandelier)
-    r.drawCircleRadialGradient(light.x, light.y, 220.0f,
-                               0.65f, 0.82f, 1.0f, 0.75f,
-                               0.0f, 0.0f, 0.0f, 0.0f,
-                               0.0f, 0.0f, 36);
-
-    // Wider secondary diffuse illumination
-    float lightRad = std::max(w, h) * 0.70f;
-    r.drawCircleRadialGradient(light.x, light.y, lightRad,
-                               0.20f, 0.35f, 0.55f, 0.40f,
-                               0.0f, 0.0f, 0.0f, 0.0f,
-                               0.0f, 0.0f, 36);
-
-    r.drawRectVignette(x, y, w, h, 0.0f, 0.48f, 0.0f, 0.0f, 0.0f);
-}
-
-// ----------------------------------------------------------------------------
-// 6. Exotic Rosewood Parlor
-// ----------------------------------------------------------------------------
-void renderRosewoodParlor(
-    eatsbits::ui::BatchRenderer2D& r,
-    float x, float y, float w, float h,
-    const eatsbits::ui::LightSource2D& light,
-    uint32_t seed
-) {
-    // 1. Rich mahogany/rosewood base gradient
-    r.drawRectGradient(x, y, w, h, 0.26f, 0.10f, 0.06f, 0.12f, 0.04f, 0.02f, 1.0f);
-
-    // 2. Chandelier light pool
-    float lightRad = std::max(w, h) * 0.72f;
-    r.drawCircleRadialGradient(light.x, light.y, lightRad,
-                               0.48f, 0.22f, 0.12f, 0.48f,
-                               0.0f, 0.0f, 0.0f, 0.0f,
-                               0.0f, 0.0f, 36);
-
-    // 3. Specular satin varnish sheen
-    r.drawCircleRadialGradient(light.x, light.y, 200.0f,
-                               0.85f, 0.65f, 0.40f, 0.40f,
-                               0.0f, 0.0f, 0.0f, 0.0f,
-                               0.0f, 0.0f, 36);
-
-    eatsbits::ui::ScissorScope scissor(&r, x, y, w, h);
-
-    // 4. Concentric Growth Rings & Grain (vector wavy paths)
-    const float ringStep = 22.0f;
-    int rIdx = 0;
-    for (float ry = y + 8.0f; ry < y + h; ry += ringStep, ++rIdx) {
-        float rWood = 0.18f + static_cast<float>((rIdx * 17) % 7) * 0.02f;
-        float gWood = 0.07f + static_cast<float>((rIdx * 17) % 7) * 0.01f;
-        float bWood = 0.04f;
-
-        const int segs = 10;
-        Point2D ringPts[11];
-        float segW = w / static_cast<float>(segs);
-        float amp = 6.0f + static_cast<float>(rIdx % 4) * 3.5f;
-        float phase = static_cast<float>(rIdx) * 1.3f;
-        for (int s = 0; s <= segs; ++s) {
-            float px = x + static_cast<float>(s) * segW;
-            float py = ry + amp * std::sin(static_cast<float>(s) * 0.8f + phase);
-            ringPts[s] = { px, py };
-        }
-        r.drawPath(ringPts, segs + 1, 1.8f, rWood, gWood, bWood, 0.75f, false);
-    }
-
-    // 5. Longitudinal pore cuts (dark fine pores)
-    r.drawDustSpecks(x, y, w, h, 50, seed, 0.08f, 0.02f, 0.01f, 0.40f);
-    r.drawRectVignette(x, y, w, h, 0.0f, 0.45f, 0.0f, 0.0f, 0.0f);
-}
-
-// ----------------------------------------------------------------------------
-// 7. Carved Gothic Slate / Stone Pavers
-// ----------------------------------------------------------------------------
-void renderCarvedStone(
-    eatsbits::ui::BatchRenderer2D& r,
-    float x, float y, float w, float h,
-    const eatsbits::ui::LightSource2D& light,
-    uint32_t seed
-) {
-    // 1. Cool charcoal slate base
-    r.drawRectGradient(x, y, w, h, 0.22f, 0.25f, 0.29f, 0.12f, 0.14f, 0.17f, 1.0f);
-
-    // 2. Chandelier light pool
-    float lightRad = std::max(w, h) * 0.72f;
-    r.drawCircleRadialGradient(light.x, light.y, lightRad,
-                               0.38f, 0.42f, 0.48f, 0.35f,
-                               0.0f, 0.0f, 0.0f, 0.0f,
-                               0.0f, 0.0f, 36);
-
-    eatsbits::ui::ScissorScope scissor(&r, x, y, w, h);
-
-    // 3. Hex/Irregular Stone Pavers
-    const float paverW = 84.0f;
-    const float paverH = 56.0f;
-    int row = 0;
-    for (float py = y; py < y + h; py += paverH, ++row) {
-        float xOff = (row % 2 == 1) ? (paverW * 0.5f) : 0.0f;
-        for (float px = x - paverW + xOff; px < x + w + paverW; px += paverW) {
-            // Chiseled paver block
-            r.drawRoundedRect(px + 3.0f, py + 3.0f, paverW - 6.0f, paverH - 6.0f, 4.0f,
-                              0.25f, 0.28f, 0.33f, 0.90f, 4);
-            // Highlight on top-left chiseled ridge
-            r.drawRoundedRectOutline(px + 3.0f, py + 3.0f, paverW - 6.0f, paverH - 6.0f, 4.0f,
-                                     0.40f, 0.45f, 0.52f, 0.65f, 1.2f, 4);
-            // Deep mortar crevice
-            r.drawRect(px, py, paverW, 3.0f, 0.08f, 0.09f, 0.11f, 0.85f);
-            r.drawRect(px, py, 3.0f, paverH, 0.08f, 0.09f, 0.11f, 0.85f);
-        }
-    }
-
-    // 4. Chiseled mineral specks
-    r.drawDustSpecks(x, y, w, h, 60, seed, 0.55f, 0.60f, 0.68f, 0.25f);
-    r.drawRectVignette(x, y, w, h, 0.0f, 0.50f, 0.0f, 0.0f, 0.0f);
-}
-
-// ----------------------------------------------------------------------------
-// 8. Tavern Heartwood (Classic Forest Baize Felt)
-// ----------------------------------------------------------------------------
-void renderTavernHeartwood(
-    eatsbits::ui::BatchRenderer2D& r,
-    float x, float y, float w, float h,
-    const eatsbits::ui::LightSource2D& light,
-    uint32_t seed
-) {
-    // 1. Deep forest green gradient
-    r.drawRectGradient(x, y, w, h, 0.09f, 0.26f, 0.16f, 0.04f, 0.15f, 0.09f, 1.0f);
-
-    // 2. Chandelier light pool
-    float lightRad = std::max(w, h) * 0.72f;
-    r.drawCircleRadialGradient(light.x, light.y, lightRad,
-                               0.18f, 0.42f, 0.28f, 0.40f,
-                               0.0f, 0.0f, 0.0f, 0.0f,
-                               0.0f, 0.0f, 36);
-
-    // 3. Baize cross-weave stipple
-    r.drawPatternedRectGradient(x, y, w, h,
-                                0.09f, 0.26f, 0.16f, 0.04f, 0.15f, 0.09f, 1.0f,
-                                eatsbits::ui::VectorPatternType::DotGrid, 0.04f, 18.0f, 0.0f);
-
-    r.drawDustSpecks(x, y, w, h, 35, seed, 0.76f, 0.58f, 0.26f, 0.14f);
-    r.drawRectVignette(x, y, w, h, 0.0f, 0.38f, 0.0f, 0.0f, 0.0f);
-}
-
-// ----------------------------------------------------------------------------
-// 9. Sunken Sanctum (Obsidian Runes)
+// 5. Sunken Sanctum (Obsidian Runes)
 // ----------------------------------------------------------------------------
 void renderSunkenSanctum(
     eatsbits::ui::BatchRenderer2D& r,
@@ -440,7 +264,7 @@ void renderSunkenSanctum(
 }
 
 // ----------------------------------------------------------------------------
-// 10. Perilous Shores (Ship Teak Deck)
+// 6. Perilous Shores (Ship Teak Deck)
 // ----------------------------------------------------------------------------
 void renderPerilousShores(
     eatsbits::ui::BatchRenderer2D& r,
@@ -484,24 +308,14 @@ void renderVectorFallback(
         case TableThemeId::StripedJersey:
             renderStripedJersey(r, x, y, w, h, light, seed);
             break;
-        case TableThemeId::ReflectiveTile:
-            renderReflectiveTile(r, x, y, w, h, light, seed);
-            break;
-        case TableThemeId::RosewoodParlor:
-            renderRosewoodParlor(r, x, y, w, h, light, seed);
-            break;
-        case TableThemeId::CarvedStone:
-            renderCarvedStone(r, x, y, w, h, light, seed);
-            break;
         case TableThemeId::SunkenSanctum:
             renderSunkenSanctum(r, x, y, w, h, light, seed);
             break;
         case TableThemeId::PerilousShores:
             renderPerilousShores(r, x, y, w, h, light, seed);
             break;
-        case TableThemeId::TavernHeartwood:
         default:
-            renderTavernHeartwood(r, x, y, w, h, light, seed);
+            renderLinenCanvas(r, x, y, w, h, 0.08f, 0.28f, 0.14f, light, seed);
             break;
     }
 }
@@ -580,18 +394,6 @@ std::string resolveTexturePath(const std::string& filename) {
 
 const PbrMaterialDef* getMaterialDefForTheme(TableThemeId theme) {
     switch (theme) {
-        case TableThemeId::RosewoodParlor: {
-            static const PbrMaterialDef d{
-                "Wood049", "rosewood_parlor", 2.0f, 1.35f, 0.65f, 0.22f, 0.88f, 1.0f, 0.95f, 0.92f
-            };
-            return &d;
-        }
-        case TableThemeId::TavernHeartwood: {
-            static const PbrMaterialDef d{
-                "WoodFloor051", "tavern_heartwood", 2.2f, 1.45f, 0.50f, 0.20f, 0.90f, 1.0f, 0.98f, 0.95f
-            };
-            return &d;
-        }
         case TableThemeId::EmeraldLawn: {
             static const PbrMaterialDef d{
                 "Fabric037", "emerald_lawn", 2.8f, 1.25f, 0.18f, 0.26f, 0.85f, 0.50f, 1.15f, 0.65f
@@ -616,18 +418,6 @@ const PbrMaterialDef* getMaterialDefForTheme(TableThemeId theme) {
             };
             return &d;
         }
-        case TableThemeId::ReflectiveTile: {
-            static const PbrMaterialDef d{
-                "Tiles052", "reflective_tile", 2.4f, 1.55f, 0.90f, 0.20f, 0.88f, 1.0f, 1.0f, 1.0f
-            };
-            return &d;
-        }
-        case TableThemeId::CarvedStone: {
-            static const PbrMaterialDef d{
-                "Rocks011", "carved_stone", 1.8f, 1.65f, 0.22f, 0.20f, 0.90f, 0.95f, 0.95f, 0.98f
-            };
-            return &d;
-        }
         case TableThemeId::SunkenSanctum: {
             static const PbrMaterialDef d{
                 "Onyx013", "sunken_sanctum", 1.7f, 1.15f, 0.85f, 0.16f, 0.84f, 0.75f, 0.88f, 1.05f
@@ -640,12 +430,42 @@ const PbrMaterialDef* getMaterialDefForTheme(TableThemeId theme) {
             };
             return &d;
         }
+        case TableThemeId::PebbledCowhide: {
+            static const PbrMaterialDef d{
+                "LeatherPebbled", "pebbled_cowhide", 2.0f, 1.60f, 0.35f, 0.20f, 0.88f, 1.0f, 1.0f, 1.0f
+            };
+            return &d;
+        }
+        case TableThemeId::LeatherNubuck: {
+            static const PbrMaterialDef d{
+                "Leather006", "leather006", 2.0f, 1.40f, 0.25f, 0.22f, 0.85f, 1.0f, 1.0f, 1.0f
+            };
+            return &d;
+        }
+        case TableThemeId::PaintedWood: {
+            static const PbrMaterialDef d{
+                "PaintedWood008C", "paintedwood008c", 2.2f, 1.50f, 0.30f, 0.22f, 0.88f, 1.0f, 1.0f, 1.0f
+            };
+            return &d;
+        }
+        case TableThemeId::PixelDungeon: {
+            static const PbrMaterialDef d{
+                "PixelDungeon", "pixel_dungeon_brick", 1.5f, 1.80f, 0.20f, 0.25f, 0.85f, 1.0f, 1.0f, 1.0f
+            };
+            return &d;
+        }
+        case TableThemeId::PixelWater: {
+            static const PbrMaterialDef d{
+                "PixelWater", "pixel_emerald_water", 1.5f, 1.20f, 0.70f, 0.25f, 0.85f, 1.0f, 1.0f, 1.0f
+            };
+            return &d;
+        }
         default:
             return nullptr;
     }
 }
 
-bool loadMaterialFromBytes(const uint8_t* blobPtr, size_t blobSize, PbrTextureData& outTex, PbrMaterialDef& ioDef) {
+bool loadMaterialFromBytes(const uint8_t* blobPtr, size_t blobSize, PbrTextureData& outTex, [[maybe_unused]] PbrMaterialDef& ioDef) {
     if (!blobPtr || blobSize == 0) return false;
 
     // 1. Check for EBKG container (Channel-packed PBR)
@@ -737,6 +557,26 @@ bool loadMaterialFromEats(const std::string& filePath, PbrTextureData& outTex, P
 
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
+
+    // Check if this package or script contains procedural Eatscript synthesis
+    if (isProceduralScript(content)) {
+        ProceduralPbrMaps maps;
+        ProceduralBakeOptions opts;
+        opts.width = 512;
+        opts.height = 512;
+        opts.overrideDimensions = true;
+        if (bakeProceduralPbrBundle(content, maps, opts)) {
+            outTex.width = maps.width;
+            outTex.height = maps.height;
+            outTex.color = std::move(maps.colorRgb);
+            outTex.normal = std::move(maps.normalRgb);
+            outTex.orm = std::move(maps.orm);
+            outTex.loaded = true;
+            std::cout << "[SolEnshaded] Successfully synthesized procedural theme script: " << filePath
+                      << " (" << outTex.width << "x" << outTex.height << ")\n";
+            return true;
+        }
+    }
 
     std::string scriptPart = content;
     std::string blobPart;
@@ -1192,7 +1032,32 @@ struct ProceduralBackgroundSystem::Impl {
         if (tex.loaded) return true;
         if (tex.loadAttempted) return false;
 
-        // 1. Try single-file .eats theme package first
+        // 1. Priority 1: Check procedural .eat script (Zero heavy PNGs, CPU SIMD synthesis)
+        std::string procPath = resolveProceduralScriptPath(defaultDef.themeSlug);
+        if (procPath.empty()) {
+            procPath = resolveProceduralScriptPath(defaultDef.materialName);
+        }
+        if (!procPath.empty()) {
+            ProceduralPbrMaps maps;
+            ProceduralBakeOptions opts;
+            opts.width = 512;
+            opts.height = 512;
+            opts.overrideDimensions = true;
+            if (bakeProceduralPbrBundle(procPath, maps, opts)) {
+                tex.width = maps.width;
+                tex.height = maps.height;
+                tex.color = std::move(maps.colorRgb);
+                tex.normal = std::move(maps.normalRgb);
+                tex.orm = std::move(maps.orm);
+                tex.loaded = true;
+                materialDefs[theme] = defaultDef;
+                std::cout << "[SolEnshaded] Synthesized procedural PBR theme: " << defaultDef.themeSlug
+                          << " from " << procPath << " (" << tex.width << "x" << tex.height << ")\n";
+                return true;
+            }
+        }
+
+        // 2. Priority 2: Try single-file .eats theme package
         std::string themeFile = std::string(defaultDef.themeSlug) + ".eats";
         std::string themePath = resolveThemePath(themeFile);
         if (themePath.empty()) {
@@ -1240,8 +1105,17 @@ bool ProceduralBackgroundSystem::isPbrTexturesEnabled() const noexcept {
     return impl_ ? impl_->pbrEnabled : false;
 }
 
+bool ProceduralBackgroundSystem::hasProceduralMaterial(TableThemeId theme) const noexcept {
+    const PbrMaterialDef* def = getMaterialDefForTheme(theme);
+    if (!def) return false;
+    if (!resolveProceduralScriptPath(def->themeSlug).empty()) return true;
+    if (!resolveProceduralScriptPath(def->materialName).empty()) return true;
+    return false;
+}
+
 bool ProceduralBackgroundSystem::hasPbrMaterial(TableThemeId theme) const noexcept {
     if (impl_ && impl_->customThemeLoaded) return true;
+    if (hasProceduralMaterial(theme)) return true;
     const PbrMaterialDef* def = getMaterialDefForTheme(theme);
     if (!def) return false;
     std::string themeFile = std::string(def->themeSlug) + ".eats";
@@ -1282,10 +1156,50 @@ bool ProceduralBackgroundSystem::loadCustomThemeFromMemory(
     return false;
 }
 
+bool ProceduralBackgroundSystem::loadProceduralTheme(
+    const std::string& scriptPathOrSource,
+    const ProceduralBakeOptions& options
+) {
+    if (!impl_) return false;
+
+    ProceduralPbrMaps maps;
+    if (!bakeProceduralPbrBundle(scriptPathOrSource, maps, options)) {
+        std::cerr << "[SolEnshaded] Failed to synthesize procedural theme: " << maps.errorMessage << "\n";
+        return false;
+    }
+
+    PbrTextureData customTex;
+    customTex.width = maps.width;
+    customTex.height = maps.height;
+    customTex.color = std::move(maps.colorRgb);
+    customTex.normal = std::move(maps.normalRgb);
+    customTex.orm = std::move(maps.orm);
+    customTex.loaded = true;
+
+    PbrMaterialDef customDef{
+        "ProceduralTheme", "procedural",
+        2.0f, 1.35f, 0.65f, 0.22f, 0.88f,
+        1.0f, 1.0f, 1.0f
+    };
+
+    impl_->customThemeLoaded = true;
+    impl_->customTexture = std::move(customTex);
+    impl_->customDef = customDef;
+    impl_->invalidate();
+    std::cout << "[SolEnshaded] Successfully loaded procedural theme ("
+              << customTex.width << "x" << customTex.height << ")\n";
+    return true;
+}
+
 bool ProceduralBackgroundSystem::loadCustomEatsTheme(const std::string& eatsFilePath) {
     if (!impl_) return false;
-    std::string resolved = resolveThemePath(eatsFilePath);
+    std::string resolved = resolveProceduralScriptPath(eatsFilePath);
+    if (resolved.empty()) resolved = resolveThemePath(eatsFilePath);
     if (resolved.empty()) resolved = eatsFilePath;
+
+    if (isProceduralScript(resolved)) {
+        return loadProceduralTheme(resolved);
+    }
 
     PbrMaterialDef customDef{
         "CustomMaterial", "custom", 2.0f, 1.35f, 0.65f, 0.22f, 0.88f, 1.0f, 1.0f, 1.0f

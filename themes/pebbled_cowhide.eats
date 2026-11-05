@@ -1,0 +1,77 @@
+# SolEnshaded Procedural Background Theme Package
+# Synthesized at runtime via Eatscript proctex API (Zero heavy PNG textures)
+
+sol.set_theme({
+    id: "pebbled_cowhide",
+    name: "Pebbled Cowhide",
+    author: "SolEnshaded / Eatscript",
+    description: "Embossed pebble grain cowhide leather with dual-scale Worley cellular relief",
+    version: 1,
+    procedural: true
+})
+
+# --- Procedural Synthesis Script ---
+# Pebbled Cowhide Leather (PBR Procedural Texture)
+# Embossed pebble grain architecture with dual-scale Worley cellular relief.
+tex = proctex.canvas(width=512, height=512, seed=606, seamless=true)
+
+# 1. Multi-Tier Cellular Relief
+macro_cells = tex.worley(scale_x=68.0, scale_y=68.0, jitter=0.82, mode="f2_minus_f1", seed_offset=101)
+micro_cells = tex.worley(scale_x=142.0, scale_y=142.0, jitter=0.80, mode="f2_minus_f1", seed_offset=202)
+cellular_base = tex.blend(macro_cells, micro_cells, mode="overlay", weight=0.34)
+
+warp_x = tex.fbm(scale_x=7.0, scale_y=7.0, octaves=3, persistence=0.50, seed_offset=303)
+warp_y = tex.fbm(scale_x=7.0, scale_y=7.0, octaves=3, persistence=0.50, seed_offset=404)
+warped_cells = tex.warp(cellular_base, warp_x, warp_y, strength=0.022)
+
+skin_noise = tex.fbm(scale_x=180.0, scale_y=180.0, octaves=4, persistence=0.58, seed_offset=505)
+eroded_cells = tex.slope_blur(warped_cells, skin_noise, strength=0.008, samples=8, mode="min")
+pillowed = tex.pow(eroded_cells, exponent=0.60)
+
+crevices = tex.worley(scale_x=68.0, scale_y=68.0, jitter=0.82, mode="cracks", seed_offset=101)
+warped_crevices = tex.warp(crevices, warp_x, warp_y, strength=0.022)
+
+macro_folds = tex.fbm(scale_x=2.5, scale_y=2.5, octaves=3, persistence=0.50, seed_offset=606)
+
+height_raw = tex.blend(pillowed, warped_crevices, mode="multiply", weight=0.40)
+height_raw = tex.blend(height_raw, macro_folds, mode="overlay", weight=0.10)
+height_raw = tex.blend(height_raw, skin_noise, mode="overlay", weight=0.06)
+height = tex.remap(height_raw, in_min=0.0, in_max=1.0, out_min=0.20, out_max=0.74)
+
+# 2. Multi-Tier Pigment Stack
+macro_mottle = tex.fbm(scale_x=2.2, scale_y=2.2, octaves=4, persistence=0.55, seed_offset=707)
+substrate = tex.gradient_map(macro_mottle, [
+    [0.00, "#23180b"],
+    [0.30, "#261a0e"],
+    [0.55, "#2a1c12"],
+    [0.80, "#2e1e15"],
+    [1.00, "#322119"]
+])
+
+pores = tex.worley(scale_x=260.0, scale_y=260.0, jitter=0.75, mode="f1", seed_offset=808)
+pore_mask = tex.smoothstep(pores, edge0=0.0, edge1=0.25)
+pore_dark = tex.solid_color("#1b1206")
+albedo = tex.color_blend(substrate, pore_dark, mode="mix", mask=pore_mask, weight=0.12)
+
+crest_mask = tex.smoothstep(height, edge0=0.46, edge1=0.70)
+crest_burnish = tex.solid_color("#2f1e14")
+albedo = tex.color_blend(albedo, crest_burnish, mode="mix", mask=crest_mask, weight=0.42)
+
+valley_mask = tex.invert(warped_crevices)
+valley_mask = tex.pow(valley_mask, exponent=1.6)
+crevice_grime = tex.solid_color("#1a1205")
+albedo = tex.color_blend(albedo, crevice_grime, mode="multiply", mask=valley_mask, weight=0.34)
+
+cavity = tex.curvature(height, strength=1.1, radius=1)
+albedo = tex.color_blend(albedo, crevice_grime, mode="multiply", mask=cavity, weight=0.12)
+albedo = tex.adjust_color(albedo, brightness=0.003, contrast=1.01, saturation=1.01)
+
+# 3. Roughness & Output
+roughness_base = tex.remap(height, in_min=0.20, in_max=0.74, out_min=0.68, out_max=0.42)
+micro_rough = tex.fbm(scale_x=120.0, scale_y=120.0, octaves=4, persistence=0.54, seed_offset=909)
+roughness = tex.blend(roughness_base, micro_rough, mode="overlay", weight=0.28)
+
+lit = tex.shade_pbr(albedo, height, roughness=roughness, metallic=0.0, normal_strength=2.2, ao_intensity=1.1, light_azimuth_deg=135.0, light_elevation_deg=50.0)
+tex.output(lit)
+tex.output_pbr(albedo, height, roughness=roughness, normal_strength=2.2)
+

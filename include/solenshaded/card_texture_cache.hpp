@@ -58,6 +58,14 @@ enum class DeckThemeId : uint8_t {
     Count
 };
 
+enum class CardWearLevel : uint8_t {
+    Pristine = 0,    // Pure original crisp vector/bitmap art (digital clean)
+    Natural  = 1,    // Authentic playing card: warm ivory stock, softened press inks, micro-linen air-cushion finish
+    Played   = 2,    // Gently handled: finger oils/vignette along edges, softened borders, slight corner scuffs
+    Vintage  = 3,    // Aged deck: sepia oxidation patina, irregular corner fiber wear, subtle edge chipping
+    Count    = 4
+};
+
 class CardTextureCache {
 public:
     static CardTextureCache& instance();
@@ -80,6 +88,11 @@ public:
     bool loadBitmapDeck(const std::string& bitmapFilePath, int cardW = kDefaultCardW, int cardH = kDefaultCardH);
     bool loadDeckTheme(DeckThemeId theme, int cardW = kDefaultCardW, int cardH = kDefaultCardH);
     void bakeProceduralDeck(int cardW = kDefaultCardW, int cardH = kDefaultCardH);
+
+    [[nodiscard]] CardWearLevel cardWearLevel() const noexcept { return wearLevel_; }
+    void setCardWearLevel(CardWearLevel level);
+    static const char* cardWearLevelName(CardWearLevel level) noexcept;
+    void applyConditioningAndSync(CardWearLevel wear);
 
     [[nodiscard]] const CardTexture* getCardTexture(Suit s, Rank r) const noexcept;
     [[nodiscard]] const CardTexture* getCardBackTexture() const noexcept;
@@ -114,6 +127,8 @@ private:
     bool isLoaded_{false};
     bool hasGpuAtlas_{false};
     DeckThemeId currentTheme_{DeckThemeId::ClassicSvg};
+    CardWearLevel wearLevel_{CardWearLevel::Natural};
+    std::array<CardTexture, kTotalTextures> baseTextures_{};
     std::array<CardTexture, kTotalTextures> textures_{};
     std::array<CardAtlasSlot, kTotalTextures> atlasSlots_{};
 };

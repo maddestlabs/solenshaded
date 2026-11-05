@@ -1,0 +1,35 @@
+# SolEnshaded Procedural Background Theme Package
+# Synthesized at runtime via Eatscript proctex API (Zero heavy PNG textures)
+
+sol.set_theme({
+    id: "pixel_emerald_water",
+    name: "Pixel Emerald Water",
+    author: "SolEnshaded / Eatscript",
+    description: "Retro 32x32 16-bit RPG shimmering aquatic water tile with Bayer dithering",
+    version: 1,
+    procedural: true
+})
+
+# --- Procedural Synthesis Script ---
+# Retro 32x32 16-Bit RPG Shimmering Water Tile
+tex = proctex.canvas(width=512, height=512, seed=3232, seamless=true)
+
+# 1. Inverted Worley F1 for bright water caustic ridges + horizontal wave stretch
+caustics = tex.worley(scale_x=3.0, scale_y=5.0, jitter=0.88, mode="f1", metric="euclidean")
+waves = tex.fbm(scale_x=2.0, scale_y=6.0, octaves=3, persistence=0.5, seed_offset=19)
+warped = tex.warp(caustics, waves, waves, strength=0.14)
+shimmer = tex.pow(warped, exponent=1.8)
+
+# 2. Vivid 16-bit aquatic color ramp
+water_col = tex.gradient_map(shimmer, [
+    [0.00, "#124e89"],
+    [0.45, "#0099db"],
+    [0.82, "#2ce8f5"],
+    [1.00, "#ffffff"]
+])
+
+# 3. Quantize to 32x32 pixel grid with ordered Bayer 4x4 dithering
+retro = tex.pixel_art(water_col, target_w=32, target_h=32, palette="endesga32", dither="bayer4x4", dither_strength=0.32, upscale_to_canvas=true)
+tex.output(retro)
+tex.output_pbr(retro, shimmer, roughness=0.15, normal_strength=1.5)
+

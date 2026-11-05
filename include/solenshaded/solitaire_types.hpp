@@ -50,17 +50,18 @@ enum class GameVariant : uint8_t {
 };
 
 enum class TableThemeId : uint8_t {
-    TavernHeartwood = 0, // Classic Hardwood 3.0 warm walnut border + deep forest baize felt
-    SunkenSanctum   = 1, // ZAngband Spectre vault: carved obsidian + spectral slate + cyan runes
-    PerilousShores  = 2, // Cartographer's teak cabin + antique vellum playmat + brass inlays
-    RosewoodParlor  = 3, // Deep exotic rosewood grain + satin polyurethane sheen
-    CarvedStone     = 4, // Weathered gothic slate / stone slabs with mortar crevice AO
-    ReflectiveTile  = 5, // Glazed ceramic subway/marble tile with specular highlight spot
-    EmeraldLawn     = 6, // Green linen canvas weave (ambientCG Fabric035)
-    HopsackTweed    = 7, // Basketweave hopsack tweed with multicolor neps (ambientCG Fabric054)
-    DenimChambray   = 8, // Indigo chambray denim with horizontal weft slubs (ambientCG Fabric073)
-    StripedJersey   = 9, // Horizontal striped ribbed knit jersey (ambientCG Fabric018)
-    Count           = 10
+    EmeraldLawn   = 0, // Green linen canvas weave (ambientCG Fabric035 / classic felt)
+    HopsackTweed  = 1, // Basketweave hopsack tweed with multicolor neps (ambientCG Fabric063)
+    DenimChambray = 2, // Indigo chambray denim with horizontal weft slubs (ambientCG Fabric061)
+    StripedJersey = 3, // Horizontal striped ribbed knit jersey (ambientCG Fabric079)
+    SunkenSanctum = 4, // ZAngband Spectre vault: polished obsidian + cyan aether runes
+    PerilousShores= 5, // Cartographer's cabin + weathered coastal moss (ambientCG Moss002)
+    PebbledCowhide= 6, // Embossed pebble grain cowhide leather
+    LeatherNubuck = 7, // Distressed aniline nubuck cowhide (ambientCG Leather006)
+    PaintedWood   = 8, // Weathered painted barnwood planks (ambientCG PaintedWood008C)
+    PixelDungeon  = 9, // Retro 16x16 dungeon brick wall quantized to Endesga32
+    PixelWater    = 10,// Retro 32x32 aquatic shimmering water tile
+    Count         = 11
 };
 
 struct Card {

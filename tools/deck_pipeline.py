@@ -286,6 +286,61 @@ def get_card_prompt(name, theme):
             f"high-contrast lighting against dark obsidian tech cardstock, no blur, no realistic photo noise, edge-to-edge card layout."
         )
 
+    elif "baroque" in theme_lower or "gothic" in theme_lower or "noir" in theme_lower or "filigree" in theme_lower:
+        # Specialized dark gothic baroque / ornate filigree relief prompt builder
+        if "king" in name:
+            subject = (
+                f"Regal Baroque Monarch King of {suit.capitalize()} with sculpted antique silver crown, noble velvet and damask robes with elaborate silver embroidery, "
+                f"holding an ornate baroque ceremonial scepter or sword with {suit_sym} heraldic crest, encased in a dimensional acanthus scrollwork frame"
+            )
+        elif "queen" in name:
+            subject = (
+                f"Majestic Baroque Queen and Empress of {suit.capitalize()} wearing an intricate chiseled silver tiara and baroque pearls, ornate lace ruff, "
+                f"holding an engraved baroque {suit_sym} mirror or talisman, framed in layered 3D rococo floral filigree"
+            )
+        elif "jack" in name:
+            subject = (
+                f"Dashing young Baroque Jack knight of {suit.capitalize()} in embossed antique silver plate armor with baroque scroll engravings, "
+                f"ornate collar, holding an engraved dueling rapier with {suit_sym} pommel, surrounded by baroque leaf flourishes"
+            )
+        elif "ace" in name:
+            subject = (
+                f"Monumental central ornate {suit.capitalize()} ace emblem with intricate 3D interior floral filigree and leaf scrollwork, "
+                f"encased in an opulent baroque acanthus cartouche and grand sculpted antique silver flourish frame"
+            )
+        elif "joker" in name:
+            subject = (
+                f"Mysterious Baroque masquerade jester in an ornate sculpted silver plague doctor or Venetian carnival mask, "
+                f"holding a silver scepter with bells and juggling floating miniature ornate cards, surrounded by baroque scrollwork"
+            )
+        else:
+            subject = (
+                f"Standard playing card layout with {rank_label} of {suit.capitalize()} featuring sculpted 3D relief {suit_sym} pips "
+                f"adorned with delicate interior filigree and ornate baroque leaf accents, surrounded by a symmetrical rococo acanthus border frame"
+            )
+
+        if suit in ("hearts", "diamonds"):
+            color_rule = (
+                f"VIVID CRIMSON RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
+                f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
+                f"and primary suit symbols MUST be rich, luminous radiant ruby crimson enamel (#C8102E / #E0115F) with polished silver and rose-gold bevels. "
+                f"Do NOT make the symbols black or monochrome pewter. The red must be unmistakable, bold, and high-contrast against the dark charcoal cardstock. "
+            )
+        elif suit in ("spades", "clubs"):
+            color_rule = (
+                f"BLACK SUIT COLOR REQUIREMENT: This is a BLACK suit ({suit.capitalize()}). "
+                f"The corner rank '{rank_label}', corner {suit_sym} pip, and primary suit symbols MUST be deep solid obsidian black (#111111) "
+                f"and chiseled antique silver / dark pewter (#A0A5AA / #333333) with high-contrast metallic highlights against the matte slate background. "
+            )
+        else:
+            color_rule = "Ornate antique silver and dark pewter palette with dramatic chiaroscuro contrast against dark cardstock. "
+
+        art_style = (
+            f"Dark baroque high-relief metal sculpture and luxury playing card art, ornate chiseled antique silver, oxidized pewter, and gunmetal filigree, "
+            f"dimensional 3D baroque acanthus scrollwork and rococo flourishes, on deep dark slate/charcoal cardstock, dramatic chiaroscuro rim lighting, "
+            f"impeccable symmetry, crisp edges, no blur, standard 5:7 portrait playing card proportions, edge-to-edge card layout."
+        )
+
     else:
         # Default / Victorian Steampunk prompt builder
         if "king" in name:
@@ -378,7 +433,7 @@ def _generate_single_card(card_name, client, model_name, theme, png_dir, svg_dir
         try:
             style_img = Image.open(style_ref_path)
             contents.append(style_img)
-            prompt_text = "Style Reference: Match the artistic style, line weight, and steampunk ornamentation of the second image (while strictly adhering to the suit color requirement below). " + prompt_text
+            prompt_text = f"Style Reference: Match the artistic style, line weight, and {theme} ornamentation of the second image (while strictly adhering to the suit color requirement below). " + prompt_text
         except Exception as e:
             print(f"  -> Note: could not load style reference image {style_ref_path}: {e}")
 
@@ -620,6 +675,17 @@ def assemble_bitmap_deck(args):
             elif name == "joker_red":
                 card_path = os.path.join(png_dir, "joker_2.png")
 
+        fallback_dir = getattr(args, "fallback_dir", None)
+        if not os.path.exists(card_path) and fallback_dir and os.path.exists(fallback_dir):
+            fb_path = os.path.join(fallback_dir, f"{name}.png")
+            if not os.path.exists(fb_path):
+                if name == "joker_black":
+                    fb_path = os.path.join(fallback_dir, "joker.png")
+                elif name == "joker_red":
+                    fb_path = os.path.join(fallback_dir, "joker_2.png")
+            if os.path.exists(fb_path):
+                card_path = fb_path
+
         if os.path.exists(card_path):
             card_img = Image.open(card_path).convert("RGBA")
             if card_img.size != (target_w, target_h):
@@ -703,6 +769,7 @@ def main():
     p_asm_bmp.add_argument("--out", default="decks/steampunk.png", help="Output master PNG path")
     p_asm_bmp.add_argument("--card-width", type=int, default=360, help="Per-card width in pixels (default 360)")
     p_asm_bmp.add_argument("--card-height", type=int, default=504, help="Per-card height in pixels (default 504)")
+    p_asm_bmp.add_argument("--fallback-dir", default=None, help="Directory containing fallback card PNGs (e.g. assets/deck_cards/classic/png)")
 
     # package-eats
     p_pkg = subparsers.add_parser("package-eats", help="Package SVG/PNG deck into compressed .eats deck recipe")

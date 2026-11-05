@@ -73,7 +73,7 @@ private:
     uint32_t seed_{2026u};
     uint32_t rngState_{2026u};
     GameVariant variant_{GameVariant::KlondikeDraw1};
-    TableThemeId theme_{TableThemeId::RosewoodParlor};
+    TableThemeId theme_{TableThemeId::EmeraldLawn};
 
     int32_t score_{0};
     uint32_t moveCount_{0};

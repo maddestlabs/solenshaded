@@ -32,17 +32,18 @@ const char* SolitaireBoard::variantName(GameVariant v) noexcept {
 
 const char* SolitaireBoard::themeName(TableThemeId t) noexcept {
     switch (t) {
-        case TableThemeId::TavernHeartwood: return "TAVERN HEARTWOOD";
-        case TableThemeId::SunkenSanctum:   return "SUNKEN SANCTUM";
-        case TableThemeId::PerilousShores:  return "PERILOUS SHORES";
-        case TableThemeId::RosewoodParlor:  return "ROSEWOOD PARLOR";
-        case TableThemeId::CarvedStone:     return "CARVED SLATE";
-        case TableThemeId::ReflectiveTile:  return "REFLECTIVE TILE";
         case TableThemeId::EmeraldLawn:     return "GREEN LINEN";
         case TableThemeId::HopsackTweed:    return "HOPSACK TWEED";
         case TableThemeId::DenimChambray:   return "DENIM CHAMBRAY";
         case TableThemeId::StripedJersey:   return "STRIPED JERSEY";
-        default:                            return "TAVERN HEARTWOOD";
+        case TableThemeId::SunkenSanctum:   return "SUNKEN SANCTUM";
+        case TableThemeId::PerilousShores:  return "PERILOUS SHORES";
+        case TableThemeId::PebbledCowhide:  return "PEBBLED COWHIDE";
+        case TableThemeId::LeatherNubuck:   return "DISTRESSED LEATHER";
+        case TableThemeId::PaintedWood:     return "PAINTED WOOD";
+        case TableThemeId::PixelDungeon:    return "PIXEL DUNGEON";
+        case TableThemeId::PixelWater:      return "PIXEL WATER";
+        default:                            return "GREEN LINEN";
     }
 }
 
@@ -177,36 +178,34 @@ void SolitaireBoard::computeLayout(float viewportWidth, float viewportHeight) {
 
     const uint32_t numCols = (variant_ == GameVariant::FreeCell) ? 8u : 7u;
 
-    // Hardwood Solitaire 3.0 Dual-Axis Responsive Framing:
-    // Moldings (carved wooden rails at top and bottom of table)
-    constexpr float topBarH = 46.0f;
-    constexpr float botBarH = 42.0f;
-
-    // Responsive margins: scale with resolution, clamp to reasonable bounds
-    const float marginX = std::clamp(viewportW_ * 0.030f, 16.0f, 48.0f);
-    const float marginY = std::clamp(viewportH_ * 0.020f, 10.0f, 28.0f);
+    // Maximized Full-Felt Responsive Framing:
+    // With header cleared and single-line telemetry docked at bottom edge,
+    // we use lean modern margins (10-28px horizontal, 8-18px vertical) to maximize card scale.
+    const float marginX = std::clamp(viewportW_ * 0.018f, 10.0f, 28.0f);
+    const float marginY = std::clamp(viewportH_ * 0.014f, 8.0f, 18.0f);
+    constexpr float bottomReserved = 24.0f; // Minimal reservation for bottom telemetry watermark
 
     const float availW = viewportW_ - 2.0f * marginX;
-    const float playfieldH = viewportH_ - topBarH - botBarH;
-    const float availH = playfieldH - 2.0f * marginY;
+    const float playfieldH = viewportH_ - bottomReserved;
+    const float availH = playfieldH - marginY;
 
     // Canonical proportions in units of Card Width (w):
     // Card aspect ratio: 1.40 (height = 1.40 * width)
     constexpr float kCardAspect = 1.40f;
-    // Column gap ratio: 16% of card width
-    constexpr float kGapXRatio = 0.16f;
+    // Column gap ratio: 15% of card width
+    constexpr float kGapXRatio = 0.15f;
     // Row gap ratio between top piles (Stock/Foundations) and Tableau
-    constexpr float kGapYRatio = 0.18f;
+    constexpr float kGapYRatio = 0.16f;
 
     // Nominal cascade depth budget (in card heights) below the top tableau card:
-    // Klondike: ~6-7 cards visible initially. 1.55 provides generous uncompressed spacing.
-    // FreeCell: 8 columns with 6-7 cards deal. 1.45 gives optimal initial fit.
-    // Spectre's Patience: Column 7 starts with 11 cards (Yukon deep deal), so 1.75 budget.
-    float cascadeBudgetRatio = 1.55f;
+    // Klondike: ~6-7 cards visible initially. 1.48 provides generous uncompressed spacing.
+    // FreeCell: 8 columns with 6-7 cards deal. 1.38 gives optimal initial fit.
+    // Spectre's Patience: Column 7 starts with 11 cards (Yukon deep deal), so 1.68 budget.
+    float cascadeBudgetRatio = 1.48f;
     if (variant_ == GameVariant::FreeCell) {
-        cascadeBudgetRatio = 1.45f;
+        cascadeBudgetRatio = 1.38f;
     } else if (variant_ == GameVariant::SpectresPatience) {
-        cascadeBudgetRatio = 1.75f;
+        cascadeBudgetRatio = 1.68f;
     }
 
     // Solve for maximum card width constrained by both width and height:
@@ -233,12 +232,12 @@ void SolitaireBoard::computeLayout(float viewportWidth, float viewportHeight) {
     const float startX = std::round((viewportW_ - totalGridW) * 0.5f);
 
     const float nominalGridH = cardH_ * 2.0f + rowGap + std::round(cardH_ * cascadeBudgetRatio);
-    float topRowY = topBarH + marginY;
+    float topRowY = marginY;
     if (playfieldH > nominalGridH) {
-        // Center vertically within the felt table area, with a subtle upward bias (0.35)
+        // Center vertically within the felt table area, with an optimal upward bias (0.28)
         // to leave abundant natural room for downward tableau cascades
         const float slackY = playfieldH - nominalGridH;
-        topRowY = std::round(topBarH + marginY + slackY * 0.35f);
+        topRowY = std::round(marginY + slackY * 0.28f);
     }
     const float tableauY = topRowY + cardH_ + rowGap;
 

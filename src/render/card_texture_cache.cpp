@@ -1,4 +1,5 @@
 #include "solenshaded/card_texture_cache.hpp"
+#include "solenshaded/card_canvas.hpp"
 #include "eatsbits/ui/batch_renderer_2d.hpp"
 #include "eatsbits/eatscript/lexer.hpp"
 #include "eatsbits/eatscript/parser.hpp"
@@ -104,6 +105,183 @@ static void syncArgb32AndMips(std::array<CardTexture, CardTextureCache::kTotalTe
                         dst[x] = (a << 24) | (r << 16) | (g << 8) | b;
                     }
                 }
+            }
+        }
+    }
+}
+
+static void applyCardConditioning(
+    const std::array<CardTexture, CardTextureCache::kTotalTextures>& srcTextures,
+    std::array<CardTexture, CardTextureCache::kTotalTextures>& dstTextures,
+    CardWearLevel wearLevel
+) {
+    if (wearLevel == CardWearLevel::Pristine) {
+        for (size_t i = 0; i < CardTextureCache::kTotalTextures; ++i) {
+            dstTextures[i].width = srcTextures[i].width;
+            dstTextures[i].height = srcTextures[i].height;
+            dstTextures[i].rgba = srcTextures[i].rgba;
+        }
+        return;
+    }
+
+    float paperWarmth = 0.55f;
+    float inkSoftening = 0.35f;
+    float linenStrength = 0.016f;
+    float edgePatina = 0.0f;
+    float edgeScuff = 0.0f;
+    float sepiaShift = 0.0f;
+
+    switch (wearLevel) {
+        case CardWearLevel::Natural:
+            paperWarmth   = 0.55f;
+            inkSoftening  = 0.35f;
+            linenStrength = 0.016f;
+            edgePatina    = 0.0f;
+            edgeScuff     = 0.0f;
+            sepiaShift    = 0.0f;
+            break;
+        case CardWearLevel::Played:
+            paperWarmth   = 0.75f;
+            inkSoftening  = 0.55f;
+            linenStrength = 0.020f;
+            edgePatina    = 0.45f;
+            edgeScuff     = 0.40f;
+            sepiaShift    = 0.18f;
+            break;
+        case CardWearLevel::Vintage:
+            paperWarmth   = 1.0f;
+            inkSoftening  = 0.85f;
+            linenStrength = 0.024f;
+            edgePatina    = 0.85f;
+            edgeScuff     = 0.80f;
+            sepiaShift    = 0.60f;
+            break;
+        default:
+            break;
+    }
+
+    for (size_t i = 0; i < CardTextureCache::kTotalTextures; ++i) {
+        const auto& src = srcTextures[i];
+        auto& dst = dstTextures[i];
+        dst.width = src.width;
+        dst.height = src.height;
+        dst.rgba = src.rgba;
+        if (dst.width <= 0 || dst.height <= 0 || dst.rgba.empty()) continue;
+
+        const int w = dst.width;
+        const int h = dst.height;
+        const float invW = 1.0f / static_cast<float>(w);
+        const float invH = 1.0f / static_cast<float>(h);
+        const uint8_t cardId = (i == CardTextureCache::kCardBackIndex) ? 0xBCu : static_cast<uint8_t>(i);
+
+        const float cardAgeVariance = cardHashNoise(0x7F4A23u, cardId, 601) * 0.15f;
+        const float honorBias = (i < 52 && (i % 13 == 0 || i % 13 >= 10)) ? 0.08f : 0.0f;
+
+        for (int y = 0; y < h; ++y) {
+            const float ny = (static_cast<float>(y) + 0.5f) * invH;
+            const float dyEdge = static_cast<float>(std::min(y, (h - 1) - y));
+
+            for (int x = 0; x < w; ++x) {
+                const size_t p = static_cast<size_t>(y * w + x) * 4;
+                float r = static_cast<float>(dst.rgba[p + 0]);
+                float g = static_cast<float>(dst.rgba[p + 1]);
+                float b = static_cast<float>(dst.rgba[p + 2]);
+                const float a = static_cast<float>(dst.rgba[p + 3]);
+                if (a < 10.0f) continue;
+
+                const float nx = (static_cast<float>(x) + 0.5f) * invW;
+                const float dxEdge = static_cast<float>(std::min(x, (w - 1) - x));
+                const float minEdgeDist = std::min(dxEdge, dyEdge);
+
+                // 1. Linen / Air-Cushion Micro-Texture (subtle 2D weave)
+                const float weave = std::sin(static_cast<float>(x) * 1.5707963f) * std::cos(static_cast<float>(y) * 1.5707963f);
+                const float linenMod = 1.0f + weave * linenStrength;
+
+                // 2. Paper Stock Tone (warm casino ivory / antique stock)
+                const float lum = 0.299f * r + 0.587f * g + 0.114f * b;
+                const float whiteMask = std::clamp((lum - 175.0f) / 65.0f, 0.0f, 1.0f);
+                if (whiteMask > 0.0f) {
+                    const float paperTargetR = 250.0f - sepiaShift * 16.0f;
+                    const float paperTargetG = 246.0f - sepiaShift * 25.0f;
+                    const float paperTargetB = 237.0f - sepiaShift * 44.0f;
+
+                    const float blend = whiteMask * paperWarmth;
+                    r = r * (1.0f - blend) + paperTargetR * blend;
+                    g = g * (1.0f - blend) + paperTargetG * blend;
+                    b = b * (1.0f - blend) + paperTargetB * blend;
+
+                    r = std::clamp(r * linenMod, 0.0f, 255.0f);
+                    g = std::clamp(g * linenMod, 0.0f, 255.0f);
+                    b = std::clamp(b * linenMod, 0.0f, 255.0f);
+                }
+
+                // 3. Printing Press Ink Softening & Black Lift
+                if (r > 140.0f && r > (g + b) * 0.9f) {
+                    // Offset red inks: soften pure digital red to press crimson
+                    const float redTargetR = 196.0f - sepiaShift * 22.0f;
+                    const float redTargetG = 34.0f  + sepiaShift * 12.0f;
+                    const float redTargetB = 34.0f  - sepiaShift * 8.0f;
+                    const float inkBlend = inkSoftening * std::clamp((r - (g + b) * 0.9f) / 100.0f, 0.0f, 1.0f);
+                    r = r * (1.0f - inkBlend) + redTargetR * inkBlend;
+                    g = g * (1.0f - inkBlend) + redTargetG * inkBlend;
+                    b = b * (1.0f - inkBlend) + redTargetB * inkBlend;
+                } else if (lum < 55.0f) {
+                    // Offset black inks: lift pitch black to charcoal
+                    const float blackLiftR = 24.0f + sepiaShift * 18.0f;
+                    const float blackLiftG = 24.0f + sepiaShift * 12.0f;
+                    const float blackLiftB = 28.0f + sepiaShift * 6.0f;
+                    const float blackBlend = inkSoftening * (1.0f - lum / 55.0f);
+                    r = r * (1.0f - blackBlend) + blackLiftR * blackBlend;
+                    g = g * (1.0f - blackBlend) + blackLiftG * blackBlend;
+                    b = b * (1.0f - blackBlend) + blackLiftB * blackBlend;
+                }
+
+                // 4. Perimeter Handling Patina & Finger Oils (Played & Vintage)
+                if (edgePatina > 0.01f) {
+                    const float cdx = (nx - 0.5f) * 2.0f;
+                    const float cdy = (ny - 0.5f) * 2.0f;
+                    const float rDist = std::sqrt(cdx * cdx + cdy * cdy) * 0.70710678f;
+
+                    // Asymmetric thumb grip zones (bottom-right and bottom-left)
+                    const float thumb1 = std::exp(-((nx - 0.88f) * (nx - 0.88f) * 16.0f + (ny - 0.92f) * (ny - 0.92f) * 12.0f));
+                    const float thumb2 = std::exp(-((nx - 0.12f) * (nx - 0.12f) * 16.0f + (ny - 0.92f) * (ny - 0.92f) * 12.0f));
+                    const float thumbPatina = (thumb1 + thumb2 * 0.7f) * 0.09f;
+
+                    float vignette = std::pow(std::clamp(rDist, 0.0f, 1.0f), 2.4f) * (0.08f + cardAgeVariance) + thumbPatina;
+                    vignette *= edgePatina;
+
+                    r *= (1.0f - vignette * 0.65f);
+                    g *= (1.0f - vignette * 0.85f);
+                    b *= (1.0f - vignette * 1.35f);
+                }
+
+                // 5. Physical Edge Wear & Paper Core Exposure (Played & Vintage)
+                if (edgeScuff > 0.01f && minEdgeDist <= 5.0f) {
+                    const float perim = (dxEdge < dyEdge) ? static_cast<float>(y) : static_cast<float>(x);
+                    const uint32_t perimCoord = static_cast<uint32_t>(perim * 1.3f);
+                    const float scuffNoise = cardHashNoise(0x9E3779B9u + perimCoord, cardId, 701);
+
+                    const float edgeFactor = std::clamp((4.0f - minEdgeDist) / 3.5f, 0.0f, 1.0f);
+                    const float wearThreshold = 0.35f - (edgeScuff * 0.25f) - (honorBias * 0.1f);
+
+                    if (scuffNoise > wearThreshold && minEdgeDist <= (1.0f + edgeScuff * 2.8f)) {
+                        const float pulpR = 236.0f - sepiaShift * 10.0f;
+                        const float pulpG = 228.0f - sepiaShift * 18.0f;
+                        const float pulpB = 212.0f - sepiaShift * 30.0f;
+
+                        float pulpIntensity = edgeFactor * std::clamp((scuffNoise - wearThreshold) / (1.0f - wearThreshold), 0.0f, 1.0f);
+                        pulpIntensity *= edgeScuff;
+
+                        r = r * (1.0f - pulpIntensity) + pulpR * pulpIntensity;
+                        g = g * (1.0f - pulpIntensity) + pulpG * pulpIntensity;
+                        b = b * (1.0f - pulpIntensity) + pulpB * pulpIntensity;
+                    }
+                }
+
+                dst.rgba[p + 0] = static_cast<uint8_t>(std::clamp(r, 0.0f, 255.0f));
+                dst.rgba[p + 1] = static_cast<uint8_t>(std::clamp(g, 0.0f, 255.0f));
+                dst.rgba[p + 2] = static_cast<uint8_t>(std::clamp(b, 0.0f, 255.0f));
+                dst.rgba[p + 3] = static_cast<uint8_t>(std::clamp(a, 0.0f, 255.0f));
             }
         }
     }
@@ -224,6 +402,44 @@ static void bakeThemeCardBack(CardTexture& back, DeckThemeId theme, int cardW, i
                         }
                     }
                 }
+            } else if (theme == DeckThemeId::Custom) {
+                // Dark Baroque Noir: deep charcoal/obsidian with sculpted antique silver border and central medallion
+                r = 24; g = 26; b = 30; // Dark slate border
+                if (x >= pad && x < cardW - pad && y >= pad && y < cardH - pad) {
+                    float t = ny;
+                    r = static_cast<uint8_t>(18.0f + 10.0f * t);
+                    g = static_cast<uint8_t>(20.0f + 10.0f * t);
+                    b = static_cast<uint8_t>(24.0f + 12.0f * t);
+
+                    // Chiseled antique silver outer border
+                    float dEdgeX = std::min(x - pad, (cardW - pad) - x);
+                    float dEdgeY = std::min(y - pad, (cardH - pad) - y);
+                    if (dEdgeX <= 1.8f || dEdgeY <= 1.8f) {
+                        r = 192; g = 196; b = 204;
+                    }
+
+                    // Inner silver relief filigree line
+                    if (x >= padInner && x < cardW - padInner && y >= padInner && y < cardH - padInner) {
+                        float dInnerX = std::min(x - padInner, (cardW - padInner) - x);
+                        float dInnerY = std::min(y - padInner, (cardH - padInner) - y);
+                        if (dInnerX <= 1.2f || dInnerY <= 1.2f) {
+                            r = 140; g = 145; b = 155;
+                        }
+
+                        // Center Baroque Diamond Medallion
+                        float cx = static_cast<float>(cardW) * 0.5f;
+                        float cy = static_cast<float>(cardH) * 0.5f;
+                        float dx = std::abs(static_cast<float>(x) - cx) / (static_cast<float>(cardW) * 0.16f);
+                        float dy = std::abs(static_cast<float>(y) - cy) / (static_cast<float>(cardH) * 0.16f);
+                        if (dx + dy <= 1.0f && dx + dy >= 0.80f) {
+                            r = 192; g = 196; b = 204; // Bright antique silver rim
+                        } else if (dx + dy < 0.80f && dx + dy >= 0.35f) {
+                            r = 45; g = 48; b = 56;  // Deep relief dark field
+                        } else if (dx + dy < 0.35f) {
+                            r = 210; g = 215; b = 224; // Central silver flourish core
+                        }
+                    }
+                }
             } else {
                 // Classic baize felt panel
                 r = 240; g = 232; b = 214;
@@ -278,6 +494,30 @@ const char* CardTextureCache::deckThemeName(DeckThemeId theme) noexcept {
         case DeckThemeId::Count:       return "DEFAULT";
     }
     return "UNKNOWN";
+}
+
+const char* CardTextureCache::cardWearLevelName(CardWearLevel level) noexcept {
+    switch (level) {
+        case CardWearLevel::Pristine: return "PRISTINE";
+        case CardWearLevel::Natural:  return "NATURAL";
+        case CardWearLevel::Played:   return "PLAYED";
+        case CardWearLevel::Vintage:  return "VINTAGE";
+        case CardWearLevel::Count:    return "DEFAULT";
+    }
+    return "UNKNOWN";
+}
+
+void CardTextureCache::applyConditioningAndSync(CardWearLevel wear) {
+    applyCardConditioning(baseTextures_, textures_, wear);
+    syncArgb32AndMips(textures_);
+}
+
+void CardTextureCache::setCardWearLevel(CardWearLevel level) {
+    if (wearLevel_ == level && isLoaded_) return;
+    wearLevel_ = level;
+    if (isLoaded_) {
+        applyConditioningAndSync(wearLevel_);
+    }
 }
 
 bool CardTextureCache::initialize(int cardW, int cardH) {
@@ -579,6 +819,33 @@ bool CardTextureCache::loadDeckTheme(DeckThemeId theme, int cardW, int cardH) {
         for (const auto& path : candidateSvgs) {
             if (loadSvgDeck(path, cardW, cardH)) return true;
         }
+    } else if (theme == DeckThemeId::Custom) {
+        const std::string candidateEats[] = {
+            "decks/baroque_noir.eats",
+            "/decks/baroque_noir.eats",
+            "/user/baroque_noir.eats",
+            "decks/custom.eats",
+            "/decks/custom.eats",
+            "/user/custom.eats",
+            "../decks/baroque_noir.eats",
+            "../../decks/baroque_noir.eats",
+            "../decks/custom.eats",
+            "../../decks/custom.eats"
+        };
+        for (const auto& path : candidateEats) {
+            if (loadEatsDeck(path, cardW, cardH)) return true;
+        }
+        const std::string candidateBitmaps[] = {
+            "decks/baroque_noir.png",
+            "decks/custom.png",
+            "../decks/baroque_noir.png",
+            "../../decks/baroque_noir.png",
+            "../decks/custom.png",
+            "../../decks/custom.png"
+        };
+        for (const auto& path : candidateBitmaps) {
+            if (loadBitmapDeck(path, cardW, cardH)) return true;
+        }
     } else if (theme == DeckThemeId::Anime) {
         const std::string candidateEats[] = {
             "decks/anime.eats",
@@ -669,8 +936,8 @@ bool CardTextureCache::loadDeckFromMemory(
         } else {
             binPath += ".bin";
         }
-        if (tryLoadBinaryCache(binPath, cacheKey, cardW, cardH, textures_)) {
-            syncArgb32AndMips(textures_);
+        if (tryLoadBinaryCache(binPath, cacheKey, cardW, cardH, baseTextures_)) {
+            applyConditioningAndSync(wearLevel_);
             isLoaded_ = true;
             return true;
         }
@@ -699,7 +966,10 @@ bool CardTextureCache::loadDeckFromMemory(
             return false;
         }
 
-        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
+        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, baseTextures_, currentTheme_, binPath);
+        if (isLoaded_) {
+            applyConditioningAndSync(wearLevel_);
+        }
         return isLoaded_;
     } else if (format == "svg") {
         std::vector<char> svgXml(data, data + size);
@@ -711,7 +981,10 @@ bool CardTextureCache::loadDeckFromMemory(
             return false;
         }
 
-        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
+        isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, baseTextures_, currentTheme_, binPath);
+        if (isLoaded_) {
+            applyConditioningAndSync(wearLevel_);
+        }
         return isLoaded_;
     } else if (format == "png" || format == "bitmap") {
         int sheetW = 0, sheetH = 0, channels = 0;
@@ -723,7 +996,10 @@ bool CardTextureCache::loadDeckFromMemory(
             return false;
         }
 
-        isLoaded_ = processDecodedSheet(sheetData, sheetW, sheetH, cardW, cardH, textures_, currentTheme_, binPath);
+        isLoaded_ = processDecodedSheet(sheetData, sheetW, sheetH, cardW, cardH, baseTextures_, currentTheme_, binPath);
+        if (isLoaded_) {
+            applyConditioningAndSync(wearLevel_);
+        }
         stbi_image_free(sheetData);
         return isLoaded_;
     }
@@ -753,10 +1029,10 @@ bool CardTextureCache::loadEatsDeck(const std::string& eatsFilePath, int cardW, 
         binPath += ".bin";
     }
 
-    if (tryLoadBinaryCache(binPath, eatsFilePath, cardW, cardH, textures_)) {
+    if (tryLoadBinaryCache(binPath, eatsFilePath, cardW, cardH, baseTextures_)) {
         cardW_ = cardW;
         cardH_ = cardH;
-        syncArgb32AndMips(textures_);
+        applyConditioningAndSync(wearLevel_);
         isLoaded_ = true;
         return true;
     }
@@ -850,7 +1126,71 @@ bool CardTextureCache::loadEatsDeck(const std::string& eatsFilePath, int cardW, 
     evaluator.registerFunction("set_theme", themeDummyFn);
     evaluator.registerFunction("set_deck", setDeckFn);
 
+    CardCanvas::bindToEvaluator(evaluator, nullptr);
     evaluator.evaluateSource(scriptPart);
+
+    if (evaluator.hasFunction("on_draw_card_face") || evaluator.hasFunction("on_draw_card_back")) {
+        std::cout << "[SolEnshaded] Generating procedural card deck via Eatscript drawing API...\n";
+        cardW_ = cardW;
+        cardH_ = cardH;
+
+        const Suit suits[4] = { Suit::Spades, Suit::Hearts, Suit::Diamonds, Suit::Clubs };
+        const char* suitNames[4] = { "spades", "hearts", "diamonds", "clubs" };
+        const char* rankNames[13] = { "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K" };
+
+        CardCanvas canvas(cardW, cardH);
+        CardCanvas::bindToEvaluator(evaluator, &canvas);
+
+        for (int sIdx = 0; sIdx < 4; ++sIdx) {
+            Suit s = suits[sIdx];
+            for (int rIdx = 1; rIdx <= 13; ++rIdx) {
+                Rank r = static_cast<Rank>(rIdx);
+                size_t destIdx = cardIndex(s, r);
+                CardTexture& tex = baseTextures_[destIdx];
+                tex.width = cardW;
+                tex.height = cardH;
+
+                canvas.clear(0x00000000);
+                if (evaluator.hasFunction("on_draw_card_face")) {
+                    evaluator.callFunction("on_draw_card_face", {
+                        eatsbits::eatscript::Value("ctx"),
+                        eatsbits::eatscript::Value(rankNames[rIdx - 1]),
+                        eatsbits::eatscript::Value(suitNames[sIdx]),
+                        eatsbits::eatscript::Value(static_cast<double>(cardW)),
+                        eatsbits::eatscript::Value(static_cast<double>(cardH))
+                    });
+                } else {
+                    canvas.drawCardFace(rankNames[rIdx - 1], s, static_cast<float>(cardW), static_cast<float>(cardH));
+                }
+                tex.rgba = canvas.rgba();
+            }
+        }
+
+        // Card Back (Index: kTotalTextures - 1)
+        size_t backIdx = kTotalTextures - 1;
+        CardTexture& backTex = baseTextures_[backIdx];
+        backTex.width = cardW;
+        backTex.height = cardH;
+
+        canvas.clear(0x00000000);
+        if (evaluator.hasFunction("on_draw_card_back")) {
+            evaluator.callFunction("on_draw_card_back", {
+                eatsbits::eatscript::Value("ctx"),
+                eatsbits::eatscript::Value(static_cast<double>(cardW)),
+                eatsbits::eatscript::Value(static_cast<double>(cardH))
+            });
+            backTex.rgba = canvas.rgba();
+        } else {
+            canvas.fillRoundedRect(0, 0, static_cast<float>(cardW), static_cast<float>(cardH), 8.0f, 0xFF1B365D);
+            canvas.strokeRoundedRect(cardW * 0.05f, cardH * 0.04f, cardW * 0.90f, cardH * 0.92f, 6.0f, 0xFFD4AF37, 1.5f);
+            backTex.rgba = canvas.rgba();
+        }
+
+        syncArgb32AndMips(baseTextures_);
+        applyConditioningAndSync(wearLevel_);
+        isLoaded_ = true;
+        return true;
+    }
 
     std::vector<uint8_t> rawBytes;
     std::string format = "svgz";
@@ -909,10 +1249,10 @@ bool CardTextureCache::loadBitmapDeck(const std::string& bitmapFilePath, int car
         binPath += ".bin";
     }
 
-    if (tryLoadBinaryCache(binPath, bitmapFilePath, cardW, cardH, textures_)) {
+    if (tryLoadBinaryCache(binPath, bitmapFilePath, cardW, cardH, baseTextures_)) {
         cardW_ = cardW;
         cardH_ = cardH;
-        syncArgb32AndMips(textures_);
+        applyConditioningAndSync(wearLevel_);
         isLoaded_ = true;
         return true;
     }
@@ -927,7 +1267,10 @@ bool CardTextureCache::loadBitmapDeck(const std::string& bitmapFilePath, int car
 
     cardW_ = cardW;
     cardH_ = cardH;
-    isLoaded_ = processDecodedSheet(sheetData, sheetW, sheetH, cardW, cardH, textures_, currentTheme_, binPath);
+    isLoaded_ = processDecodedSheet(sheetData, sheetW, sheetH, cardW, cardH, baseTextures_, currentTheme_, binPath);
+    if (isLoaded_) {
+        applyConditioningAndSync(wearLevel_);
+    }
     stbi_image_free(sheetData);
     return isLoaded_;
 }
@@ -940,10 +1283,10 @@ bool CardTextureCache::loadSvgDeck(const std::string& svgFilePath, int cardW, in
         binPath += ".bin";
     }
 
-    if (tryLoadBinaryCache(binPath, svgFilePath, cardW, cardH, textures_)) {
+    if (tryLoadBinaryCache(binPath, svgFilePath, cardW, cardH, baseTextures_)) {
         cardW_ = cardW;
         cardH_ = cardH;
-        syncArgb32AndMips(textures_);
+        applyConditioningAndSync(wearLevel_);
         isLoaded_ = true;
         return true;
     }
@@ -957,7 +1300,10 @@ bool CardTextureCache::loadSvgDeck(const std::string& svgFilePath, int cardW, in
 
     cardW_ = cardW;
     cardH_ = cardH;
-    isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, textures_, currentTheme_, binPath);
+    isLoaded_ = rasterizeSvgToTextures(image, cardW, cardH, baseTextures_, currentTheme_, binPath);
+    if (isLoaded_) {
+        applyConditioningAndSync(wearLevel_);
+    }
     return isLoaded_;
 }
 
@@ -966,7 +1312,7 @@ void CardTextureCache::bakeProceduralDeck(int cardW, int cardH) {
     cardH_ = cardH;
 
     for (size_t i = 0; i < kTotalTextures; ++i) {
-        CardTexture& tex = textures_[i];
+        CardTexture& tex = baseTextures_[i];
         tex.width = cardW;
         tex.height = cardH;
         tex.rgba.assign(static_cast<size_t>(cardW * cardH * 4), 255);
@@ -987,7 +1333,7 @@ void CardTextureCache::bakeProceduralDeck(int cardW, int cardH) {
         }
     }
 
-    syncArgb32AndMips(textures_);
+    applyConditioningAndSync(wearLevel_);
     isLoaded_ = true;
 }
 

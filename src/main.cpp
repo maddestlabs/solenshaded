@@ -2,6 +2,8 @@
 #include "solenshaded/audio_foley.hpp"
 #include "solenshaded/table_renderer.hpp"
 #include "solenshaded/procedural_background.hpp"
+#include "solenshaded/proctex_api.hpp"
+#include "eatstextures/png_io.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -13,8 +15,10 @@ int main(int argc, char** argv) {
     uint32_t height = 720u;
     std::string outputPngPath;
     solenshaded::GameVariant variant = solenshaded::GameVariant::KlondikeDraw1;
-    solenshaded::TableThemeId theme = solenshaded::TableThemeId::RosewoodParlor;
-    int aaMode = -1;
+    solenshaded::TableThemeId theme = solenshaded::TableThemeId::EmeraldLawn;
+    constexpr int effectiveAa = 2; // Locked to 4x RGSS high-fidelity supersampling
+    std::string bakeScript;
+    std::string exportPbrPrefix;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -35,11 +39,7 @@ int main(int argc, char** argv) {
             std::string tName = argv[++i];
             std::string lowerT;
             for (char c : tName) lowerT += static_cast<char>(std::tolower(c));
-            if (lowerT == "rosewood" || lowerT == "wood") {
-                theme = solenshaded::TableThemeId::RosewoodParlor;
-            } else if (lowerT == "tavern" || lowerT == "heartwood" || lowerT == "parquet") {
-                theme = solenshaded::TableThemeId::TavernHeartwood;
-            } else if (lowerT == "emerald" || lowerT == "lawn" || lowerT == "linen" || lowerT == "green") {
+            if (lowerT == "emerald" || lowerT == "lawn" || lowerT == "linen" || lowerT == "green") {
                 theme = solenshaded::TableThemeId::EmeraldLawn;
             } else if (lowerT == "tweed" || lowerT == "hopsack") {
                 theme = solenshaded::TableThemeId::HopsackTweed;
@@ -47,14 +47,20 @@ int main(int argc, char** argv) {
                 theme = solenshaded::TableThemeId::DenimChambray;
             } else if (lowerT == "jersey" || lowerT == "knit" || lowerT == "striped") {
                 theme = solenshaded::TableThemeId::StripedJersey;
-            } else if (lowerT == "tile" || lowerT == "reflective") {
-                theme = solenshaded::TableThemeId::ReflectiveTile;
-            } else if (lowerT == "stone" || lowerT == "slate" || lowerT == "carved") {
-                theme = solenshaded::TableThemeId::CarvedStone;
             } else if (lowerT == "sanctum" || lowerT == "onyx" || lowerT == "obsidian") {
                 theme = solenshaded::TableThemeId::SunkenSanctum;
-            } else if (lowerT == "shores" || lowerT == "perilous" || lowerT == "ground") {
+            } else if (lowerT == "shores" || lowerT == "perilous" || lowerT == "ground" || lowerT == "moss") {
                 theme = solenshaded::TableThemeId::PerilousShores;
+            } else if (lowerT == "cowhide" || lowerT == "pebbled") {
+                theme = solenshaded::TableThemeId::PebbledCowhide;
+            } else if (lowerT == "leather" || lowerT == "nubuck" || lowerT == "distressed") {
+                theme = solenshaded::TableThemeId::LeatherNubuck;
+            } else if (lowerT == "paintedwood" || lowerT == "wood" || lowerT == "barnwood") {
+                theme = solenshaded::TableThemeId::PaintedWood;
+            } else if (lowerT == "dungeon" || lowerT == "brick" || lowerT == "pixeldungeon") {
+                theme = solenshaded::TableThemeId::PixelDungeon;
+            } else if (lowerT == "water" || lowerT == "ocean" || lowerT == "pixelwater") {
+                theme = solenshaded::TableThemeId::PixelWater;
             } else if (!lowerT.empty() && std::isdigit(lowerT[0])) {
                 int tIdx = std::clamp(std::stoi(lowerT), 0, static_cast<int>(solenshaded::TableThemeId::Count) - 1);
                 theme = static_cast<solenshaded::TableThemeId>(tIdx);
@@ -63,10 +69,47 @@ int main(int argc, char** argv) {
             solenshaded::ProceduralBackgroundSystem::instance().setPbrTexturesEnabled(false);
         } else if (arg == "--pbr") {
             solenshaded::ProceduralBackgroundSystem::instance().setPbrTexturesEnabled(true);
-        } else if ((arg == "--aa" || arg == "--anti-aliasing") && i + 1 < argc) {
-            aaMode = std::clamp(std::stoi(argv[++i]), 0, 2);
-        } else if (arg == "--no-aa") {
-            aaMode = 0;
+        } else if ((arg == "--bake-texture" || arg == "--bake-proctex" || arg == "--bake") && i + 1 < argc) {
+            bakeScript = argv[++i];
+        } else if ((arg == "--export-pbr" || arg == "--pbr-export") && i + 1 < argc) {
+            exportPbrPrefix = argv[++i];
+        } else if ((arg == "-o" || arg == "--output") && i + 1 < argc) {
+            outputPngPath = argv[++i];
+        }
+    }
+
+    // 0. Check for Headless Procedural Texture Baking CLI Command
+    if (!bakeScript.empty()) {
+        solenshaded::ProceduralBakeOptions opts;
+        opts.width = width;
+        opts.height = height;
+        opts.seed = seed;
+        opts.overrideDimensions = true;
+        opts.overrideSeed = true;
+
+        if (!exportPbrPrefix.empty()) {
+            std::cout << "[SolEnshaded] Baking procedural PBR bundle: " << bakeScript << " ("
+                      << opts.width << "x" << opts.height << ") -> " << exportPbrPrefix << "_*.png ...\n";
+            if (solenshaded::exportProceduralPbrToDisk(bakeScript, exportPbrPrefix, opts)) {
+                std::cout << "[SolEnshaded] Successfully exported PBR maps to " << exportPbrPrefix << "_*.png\n";
+                return 0;
+            }
+            std::cerr << "[SolEnshaded] Failed to export procedural PBR maps.\n";
+            return 1;
+        } else {
+            std::string outPath = !outputPngPath.empty() ? outputPngPath : "baked_texture.png";
+            std::cout << "[SolEnshaded] Baking procedural texture: " << bakeScript << " ("
+                      << opts.width << "x" << opts.height << ") -> " << outPath << " ...\n";
+            std::vector<uint8_t> rgba;
+            uint32_t outW = 0, outH = 0;
+            if (solenshaded::bakeProceduralTexture(bakeScript, rgba, outW, outH, opts)) {
+                if (eatstextures::writePngRGBA(outPath, outW, outH, rgba.data())) {
+                    std::cout << "[SolEnshaded] Successfully wrote " << outPath << " (" << outW << "x" << outH << ")\n";
+                    return 0;
+                }
+            }
+            std::cerr << "[SolEnshaded] Failed to bake procedural texture.\n";
+            return 1;
         }
     }
 
@@ -75,21 +118,14 @@ int main(int argc, char** argv) {
     board.newDeal(seed, variant);
     board.computeLayout(static_cast<float>(width), static_cast<float>(height));
 
-    const char* aaNames[] = {
-        "0 (Off / Integer-snapped)",
-        "1 (2x Fast Continuous Box Coverage)",
-        "2 (4x RGSS Rotated Grid Supersampling)"
-    };
-    int effectiveAa = (aaMode >= 0) ? aaMode : 2;
-
     std::cout << "[SolEnshaded] Initialized Deal #" << board.seed()
               << " | Variant: " << solenshaded::SolitaireBoard::variantName(board.variant())
               << " | Theme: " << solenshaded::SolitaireBoard::themeName(board.tableTheme())
-              << " | AA: " << aaNames[effectiveAa] << "\n";
+              << "\n";
 
     if (!outputPngPath.empty()) {
         std::cout << "[SolEnshaded] Rendering procedural table snapshot (" << width << "x" << height
-                  << " | AA: " << aaNames[effectiveAa] << ") -> " << outputPngPath << " ...\n";
+                  << ") -> " << outputPngPath << " ...\n";
         if (solenshaded::TableRenderer::renderToPng(board, width, height, outputPngPath, effectiveAa)) {
             std::cout << "[SolEnshaded] Successfully wrote " << outputPngPath << "\n";
             return 0;

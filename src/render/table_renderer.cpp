@@ -1,5 +1,6 @@
 #include "solenshaded/table_renderer.hpp"
 #include "solenshaded/card_texture_cache.hpp"
+#include "solenshaded/classic_deck_symbols.hpp"
 #include "solenshaded/procedural_background.hpp"
 #include "eatsbits/ui/glyph/vector_font.hpp"
 #include "eatsbits/eatscript/evaluator.hpp"
@@ -50,7 +51,9 @@ enum HudButtonId : int {
     BtnRedo       = 6,
     BtnHint       = 7,
     BtnAutoFinish = 8,
-    BtnAA         = 9
+    BtnMenuToggle = 9,
+    BtnMenuAnchor = 10,
+    BtnCardWear   = 11
 };
 
 struct HudButtonRect {
@@ -68,95 +71,146 @@ static const char* deckThemeButtonLabel(DeckThemeId theme) noexcept {
         case DeckThemeId::SteampunkAi: return "DECK: STEAMPUNK [D]";
         case DeckThemeId::Anime:       return "DECK: ANIME [D]";
         case DeckThemeId::Cyberpunk:   return "DECK: CYBERPUNK [D]";
-        case DeckThemeId::Custom:      return "DECK: CUSTOM [D]";
+        case DeckThemeId::Custom:      return "DECK: BAROQUE [D]";
         default: return "DECK [D]";
     }
 }
 
-std::vector<HudButtonRect> buildHudButtons(float width, float height, const SolitaireBoard& board, int aaMode = 2) {
-    const float botY = height - 35.0f;
-    const char* aaLabel = "AA: 2X FAST [X]";
-    if (aaMode == 0) aaLabel = "AA: OFF [X]";
-    else if (aaMode == 2) aaLabel = "AA: 4X RGSS [X]";
-
-    const char* deckLabel = deckThemeButtonLabel(CardTextureCache::instance().currentDeckTheme());
-
-    // Dynamically proportion top HUD buttons to fit screen width without overlapping live telemetry
-    float btnGap = 8.0f;
-    float startX = 16.0f;
-    float newDealW = 108.0f;
-    float restartW = 98.0f;
-    float variantW = 180.0f;
-    float themeW = 180.0f;
-    float deckW = 180.0f;
-    float aaW = 128.0f;
-
-    if (width < 1320.0f) {
-        btnGap = 6.0f;
-        startX = 12.0f;
-        newDealW = 96.0f;
-        restartW = 88.0f;
-        variantW = 150.0f;
-        themeW = 150.0f;
-        deckW = 145.0f;
-        aaW = 110.0f;
+static const char* cardWearButtonLabel(CardWearLevel wear) noexcept {
+    switch (wear) {
+        case CardWearLevel::Pristine: return "WEAR: PRISTINE [W]";
+        case CardWearLevel::Natural:  return "WEAR: NATURAL [W]";
+        case CardWearLevel::Played:   return "WEAR: PLAYED [W]";
+        case CardWearLevel::Vintage:  return "WEAR: VINTAGE [W]";
+        default: return "WEAR [W]";
     }
-    if (width < 1120.0f) {
-        btnGap = 4.0f;
-        startX = 8.0f;
-        newDealW = 88.0f;
-        restartW = 80.0f;
-        variantW = 135.0f;
-        themeW = 135.0f;
-        deckW = 130.0f;
-        aaW = 98.0f;
-    }
-
-    float x = startX;
-    auto makeBtn = [&](HudButtonId id, float w, const char* label) -> HudButtonRect {
-        HudButtonRect r{id, x, 8.0f, w, 30.0f, label};
-        x += w + btnGap;
-        return r;
-    };
-
-    HudButtonRect bNewDeal = makeBtn(BtnNewDeal, newDealW, "NEW DEAL [N]");
-    HudButtonRect bRestart = makeBtn(BtnRestart, restartW, "RESTART [R]");
-    HudButtonRect bVariant = makeBtn(BtnVariant, variantW, SolitaireBoard::variantName(board.variant()));
-    HudButtonRect bTheme   = makeBtn(BtnTheme,   themeW,   SolitaireBoard::themeName(board.tableTheme()));
-    HudButtonRect bDeck    = makeBtn(BtnDeck,    deckW,    deckLabel);
-    HudButtonRect bAA      = makeBtn(BtnAA,      aaW,      aaLabel);
-
-    // Bottom action buttons
-    const float botGap = (width < 1120.0f) ? 6.0f : 8.0f;
-    const float botStartX = (width < 1120.0f) ? 10.0f : 16.0f;
-    const float undoW = (width < 1120.0f) ? 88.0f : 96.0f;
-    const float redoW = (width < 1120.0f) ? 88.0f : 96.0f;
-    const float hintW = (width < 1120.0f) ? 150.0f : 168.0f;
-    const float finishW = (width < 1120.0f) ? 150.0f : 168.0f;
-
-    float bx = botStartX;
-    auto makeBotBtn = [&](HudButtonId id, float w, const char* label) -> HudButtonRect {
-        HudButtonRect r{id, bx, botY, w, 28.0f, label};
-        bx += w + botGap;
-        return r;
-    };
-
-    HudButtonRect bUndo   = makeBotBtn(BtnUndo,   undoW,   "UNDO [Z]");
-    HudButtonRect bRedo   = makeBotBtn(BtnRedo,   redoW,   "REDO [Y]");
-    HudButtonRect bHint   = makeBotBtn(BtnHint,   hintW,   "NETHER SIGHT [H]");
-    HudButtonRect bFinish = makeBotBtn(BtnAutoFinish, finishW, board.canAutoFinish() ? "AUTO-FINISH [A] *" : "AUTO-STEP [A]");
-
-    return { bNewDeal, bRestart, bVariant, bTheme, bDeck, bAA, bUndo, bRedo, bHint, bFinish };
 }
 
-int hitTestHudButtons(float mx, float my, float width, float height, const SolitaireBoard& board, int aaMode = 2) {
-    auto btns = buildHudButtons(width, height, board, aaMode);
+static const char* menuAnchorLabel(MenuAnchor anchor) noexcept {
+    switch (anchor) {
+        case MenuAnchor::BottomLeft:  return "DOCK: BOT-LEFT";
+        case MenuAnchor::BottomRight: return "DOCK: BOT-RIGHT";
+        case MenuAnchor::TopLeft:     return "DOCK: TOP-LEFT";
+        case MenuAnchor::TopRight:    return "DOCK: TOP-RIGHT";
+        default: return "DOCK: BOT-LEFT";
+    }
+}
+
+std::vector<HudButtonRect> buildHudButtons(
+    float width,
+    float height,
+    const SolitaireBoard& board,
+    bool menuOpen = false,
+    MenuAnchor anchor = MenuAnchor::BottomLeft
+) {
+    constexpr float orbSize = 42.0f;
+    constexpr float margin = 16.0f;
+    float orbX = margin;
+    float orbY = height - margin - orbSize;
+
+    if (anchor == MenuAnchor::BottomRight) {
+        orbX = width - margin - orbSize;
+        orbY = height - margin - orbSize;
+    } else if (anchor == MenuAnchor::TopLeft) {
+        orbX = margin;
+        orbY = margin;
+    } else if (anchor == MenuAnchor::TopRight) {
+        orbX = width - margin - orbSize;
+        orbY = margin;
+    }
+
+    HudButtonRect bMenuToggle{BtnMenuToggle, orbX, orbY, orbSize, orbSize, "MENU"};
+    if (!menuOpen) {
+        return { bMenuToggle };
+    }
+
+    // Consolidated 2-column popover drawer
+    const float popW = 328.0f;
+    const float popH = 224.0f;
+    float popX = orbX;
+    float popY = (orbY + orbSize + 8.0f + popH <= height)
+        ? (orbY + orbSize + 8.0f)
+        : (orbY - 8.0f - popH);
+
+    if (anchor == MenuAnchor::BottomRight || anchor == MenuAnchor::TopRight) {
+        popX = orbX + orbSize - popW;
+    }
+    popX = std::clamp(popX, 8.0f, std::max(8.0f, width - popW - 8.0f));
+    popY = std::clamp(popY, 8.0f, std::max(8.0f, height - popH - 8.0f));
+
+    const float colW = (popW - 24.0f) * 0.5f;
+    const float rowH = 28.0f;
+    const float rowGap = 5.0f;
+    const float startY = popY + 12.0f;
+    const float col0X = popX + 8.0f;
+    const float col1X = col0X + colW + 8.0f;
+
+    const char* deckLabel = deckThemeButtonLabel(CardTextureCache::instance().currentDeckTheme());
+    const char* wearLabel = cardWearButtonLabel(CardTextureCache::instance().cardWearLevel());
+    const char* anchorLabel = menuAnchorLabel(anchor);
+
+    auto makeBtn = [](HudButtonId id, float x, float y, float w, float h, const char* label) -> HudButtonRect {
+        return HudButtonRect{id, x, y, w, h, label};
+    };
+
+    // Column 0: Game & Aesthetics
+    HudButtonRect bNewDeal = makeBtn(BtnNewDeal, col0X, startY + 0.0f * (rowH + rowGap), colW, rowH, "NEW DEAL [N]");
+    HudButtonRect bRestart = makeBtn(BtnRestart, col0X, startY + 1.0f * (rowH + rowGap), colW, rowH, "RESTART [R]");
+    HudButtonRect bVariant = makeBtn(BtnVariant, col0X, startY + 2.0f * (rowH + rowGap), colW, rowH, SolitaireBoard::variantName(board.variant()));
+    HudButtonRect bTheme   = makeBtn(BtnTheme,   col0X, startY + 3.0f * (rowH + rowGap), colW, rowH, SolitaireBoard::themeName(board.tableTheme()));
+    HudButtonRect bDeck    = makeBtn(BtnDeck,    col0X, startY + 4.0f * (rowH + rowGap), colW, rowH, deckLabel);
+
+    // Column 1: Moves, Assists & Dock Position
+    HudButtonRect bUndo   = makeBtn(BtnUndo,       col1X, startY + 0.0f * (rowH + rowGap), colW, rowH, "UNDO [Z]");
+    HudButtonRect bRedo   = makeBtn(BtnRedo,       col1X, startY + 1.0f * (rowH + rowGap), colW, rowH, "REDO [Y]");
+    HudButtonRect bHint   = makeBtn(BtnHint,       col1X, startY + 2.0f * (rowH + rowGap), colW, rowH, "NETHER SIGHT [H]");
+    HudButtonRect bFinish = makeBtn(BtnAutoFinish, col1X, startY + 3.0f * (rowH + rowGap), colW, rowH, board.canAutoFinish() ? "AUTO-FINISH [A] *" : "AUTO-STEP [A]");
+    HudButtonRect bWear   = makeBtn(BtnCardWear,   col1X, startY + 4.0f * (rowH + rowGap), colW, rowH, wearLabel);
+    HudButtonRect bAnchor = makeBtn(BtnMenuAnchor, popX + 8.0f, startY + 5.0f * (rowH + rowGap), popW - 16.0f, rowH, anchorLabel);
+
+    return { bMenuToggle, bNewDeal, bRestart, bVariant, bTheme, bDeck, bUndo, bRedo, bHint, bFinish, bWear, bAnchor };
+}
+
+int hitTestHudButtons(
+    float mx,
+    float my,
+    float width,
+    float height,
+    const SolitaireBoard& board,
+    bool menuOpen = false,
+    MenuAnchor anchor = MenuAnchor::BottomLeft
+) {
+    auto btns = buildHudButtons(width, height, board, menuOpen, anchor);
     for (const auto& b : btns) {
         if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
             return b.id;
         }
     }
     return BtnNone;
+}
+
+bool isPointInsideMenuPopover(
+    float mx,
+    float my,
+    float width,
+    float height,
+    const SolitaireBoard& board,
+    bool menuOpen,
+    MenuAnchor anchor
+) {
+    if (!menuOpen) return false;
+    auto btns = buildHudButtons(width, height, board, menuOpen, anchor);
+    if (btns.size() <= 1) return false;
+    float minX = 1e6f, minY = 1e6f, maxX = -1e6f, maxY = -1e6f;
+    for (size_t i = 1; i < btns.size(); ++i) {
+        minX = std::min(minX, btns[i].x);
+        minY = std::min(minY, btns[i].y);
+        maxX = std::max(maxX, btns[i].x + btns[i].w);
+        maxY = std::max(maxY, btns[i].y + btns[i].h);
+    }
+    minX -= 10.0f; minY -= 10.0f;
+    maxX += 10.0f; maxY += 10.0f;
+    return (mx >= minX && mx <= maxX && my >= minY && my <= maxY);
 }
 
 struct ThemePalette {
@@ -194,40 +248,8 @@ ThemePalette getPalette(TableThemeId theme) noexcept {
                 0.24f, 0.08f, 0.07f,
                 0.88f, 0.70f, 0.34f
             };
-        case TableThemeId::RosewoodParlor:
-            return {
-                0.24f, 0.08f, 0.05f,
-                0.14f, 0.04f, 0.02f,
-                0.84f, 0.68f, 0.32f,
-                0.16f, 0.06f, 0.04f,
-                0.09f, 0.03f, 0.02f,
-                0.35f, 0.08f, 0.08f,
-                0.18f, 0.03f, 0.03f,
-                0.95f, 0.78f, 0.38f
-            };
-        case TableThemeId::CarvedStone:
-            return {
-                0.18f, 0.20f, 0.23f,
-                0.10f, 0.11f, 0.13f,
-                0.58f, 0.62f, 0.68f,
-                0.12f, 0.14f, 0.17f,
-                0.07f, 0.08f, 0.10f,
-                0.14f, 0.16f, 0.20f,
-                0.08f, 0.09f, 0.11f,
-                0.65f, 0.85f, 0.95f
-            };
-        case TableThemeId::ReflectiveTile:
-            return {
-                0.12f, 0.16f, 0.22f,
-                0.06f, 0.08f, 0.12f,
-                0.78f, 0.84f, 0.90f,
-                0.10f, 0.15f, 0.22f,
-                0.05f, 0.08f, 0.13f,
-                0.10f, 0.20f, 0.36f,
-                0.05f, 0.10f, 0.20f,
-                0.35f, 0.75f, 0.98f
-            };
         case TableThemeId::EmeraldLawn:
+        default:
             return {
                 0.30f, 0.16f, 0.08f,
                 0.16f, 0.08f, 0.04f,
@@ -271,21 +293,63 @@ ThemePalette getPalette(TableThemeId theme) noexcept {
                 0.16f, 0.17f, 0.19f,
                 0.92f, 0.28f, 0.28f
             };
-        case TableThemeId::TavernHeartwood:
-        default:
+        case TableThemeId::PebbledCowhide:
             return {
-                0.32f, 0.18f, 0.09f,
-                0.18f, 0.09f, 0.04f,
-                0.76f, 0.58f, 0.26f,
-                0.09f, 0.26f, 0.16f,
-                0.04f, 0.15f, 0.09f,
-                0.16f, 0.26f, 0.44f,
-                0.08f, 0.14f, 0.26f,
-                0.92f, 0.74f, 0.34f
+                0.22f, 0.14f, 0.08f,
+                0.12f, 0.07f, 0.04f,
+                0.85f, 0.65f, 0.30f,
+                0.20f, 0.13f, 0.08f,
+                0.13f, 0.08f, 0.05f,
+                0.28f, 0.18f, 0.12f,
+                0.16f, 0.10f, 0.06f,
+                0.95f, 0.72f, 0.35f
+            };
+        case TableThemeId::LeatherNubuck:
+            return {
+                0.18f, 0.12f, 0.09f,
+                0.10f, 0.06f, 0.04f,
+                0.78f, 0.58f, 0.32f,
+                0.22f, 0.16f, 0.12f,
+                0.14f, 0.09f, 0.07f,
+                0.26f, 0.15f, 0.10f,
+                0.14f, 0.08f, 0.05f,
+                0.85f, 0.62f, 0.38f
+            };
+        case TableThemeId::PaintedWood:
+            return {
+                0.28f, 0.28f, 0.26f,
+                0.16f, 0.16f, 0.15f,
+                0.75f, 0.80f, 0.82f,
+                0.24f, 0.27f, 0.26f,
+                0.15f, 0.18f, 0.17f,
+                0.18f, 0.26f, 0.28f,
+                0.10f, 0.16f, 0.18f,
+                0.40f, 0.82f, 0.80f
+            };
+        case TableThemeId::PixelDungeon:
+            return {
+                0.10f, 0.08f, 0.15f,
+                0.06f, 0.05f, 0.09f,
+                0.55f, 0.42f, 0.78f,
+                0.15f, 0.17f, 0.27f,
+                0.09f, 0.11f, 0.18f,
+                0.23f, 0.27f, 0.40f,
+                0.14f, 0.16f, 0.26f,
+                0.55f, 0.60f, 0.85f
+            };
+        case TableThemeId::PixelWater:
+            return {
+                0.07f, 0.18f, 0.30f,
+                0.04f, 0.10f, 0.18f,
+                0.20f, 0.85f, 0.95f,
+                0.07f, 0.31f, 0.54f,
+                0.00f, 0.20f, 0.38f,
+                0.12f, 0.45f, 0.65f,
+                0.06f, 0.28f, 0.44f,
+                0.18f, 0.90f, 0.96f
             };
     }
 }
-
 const char* rankString(Rank r) noexcept {
     switch (r) {
         case Rank::Ace:   return "A";
@@ -317,45 +381,7 @@ void drawSuitPip(
     float blue,
     float alpha = 1.0f
 ) {
-    if (radiusX < 1.0f || radiusY < 1.0f) return;
-    switch (suit) {
-        case Suit::Diamonds: {
-            r.drawTriangle(cx, cy - radiusY, cx + radiusX * 0.78f, cy, cx, cy + radiusY, red, green, blue, alpha);
-            r.drawTriangle(cx, cy - radiusY, cx, cy + radiusY, cx - radiusX * 0.78f, cy, red, green, blue, alpha);
-            break;
-        }
-        case Suit::Hearts: {
-            float lobeR = std::min(radiusX, radiusY) * 0.46f;
-            r.drawCircle(cx - radiusX * 0.36f, cy - radiusY * 0.22f, lobeR, red, green, blue, alpha, 10);
-            r.drawCircle(cx + radiusX * 0.36f, cy - radiusY * 0.22f, lobeR, red, green, blue, alpha, 10);
-            r.drawTriangle(cx - radiusX * 0.80f, cy - radiusY * 0.08f,
-                           cx + radiusX * 0.80f, cy - radiusY * 0.08f,
-                           cx, cy + radiusY * 0.95f, red, green, blue, alpha);
-            break;
-        }
-        case Suit::Spades: {
-            float lobeR = std::min(radiusX, radiusY) * 0.42f;
-            r.drawTriangle(cx, cy - radiusY * 0.95f,
-                           cx + radiusX * 0.78f, cy + radiusY * 0.12f,
-                           cx - radiusX * 0.78f, cy + radiusY * 0.12f, red, green, blue, alpha);
-            r.drawCircle(cx - radiusX * 0.34f, cy + radiusY * 0.18f, lobeR, red, green, blue, alpha, 10);
-            r.drawCircle(cx + radiusX * 0.34f, cy + radiusY * 0.18f, lobeR, red, green, blue, alpha, 10);
-            r.drawTriangle(cx, cy + radiusY * 0.25f,
-                           cx + radiusX * 0.26f, cy + radiusY * 0.95f,
-                           cx - radiusX * 0.26f, cy + radiusY * 0.95f, red, green, blue, alpha);
-            break;
-        }
-        case Suit::Clubs: {
-            float lobeR = std::min(radiusX, radiusY) * 0.38f;
-            r.drawCircle(cx, cy - radiusY * 0.36f, lobeR, red, green, blue, alpha, 10);
-            r.drawCircle(cx - radiusX * 0.38f, cy + radiusY * 0.14f, lobeR, red, green, blue, alpha, 10);
-            r.drawCircle(cx + radiusX * 0.38f, cy + radiusY * 0.14f, lobeR, red, green, blue, alpha, 10);
-            r.drawTriangle(cx, cy + radiusY * 0.15f,
-                           cx + radiusX * 0.25f, cy + radiusY * 0.95f,
-                           cx - radiusX * 0.25f, cy + radiusY * 0.95f, red, green, blue, alpha);
-            break;
-        }
-    }
+    drawClassicSuitPip(r, suit, cx, cy, radiusX, radiusY, red, green, blue, alpha);
 }
 
 struct Card3DTransform {
@@ -943,12 +969,51 @@ void drawCarvedButton(
                              (hovered || highlighted) ? 0.95f : 0.62f, (hovered || highlighted) ? 1.6f : 1.1f, 4);
 
     eatsbits::ui::glyph::drawVectorText(
-        r, b.label, b.x + 10.0f, b.y + (b.h - 11.5f) * 0.5f, 11.5f,
+        r, b.label, b.x + 8.0f, b.y + (b.h - 11.0f) * 0.5f, 11.0f,
         highlighted ? pal.accentR : 0.94f,
         highlighted ? pal.accentG : 0.90f,
         highlighted ? pal.accentB : 0.82f,
         1.0f
     );
+}
+
+void drawMenuOrbButton(
+    eatsbits::ui::BatchRenderer2D& r,
+    const HudButtonRect& b,
+    bool hovered,
+    bool menuOpen,
+    const ThemePalette& pal,
+    const eatsbits::ui::LightSource2D& light
+) {
+    const float cx = b.x + b.w * 0.5f;
+    const float cy = b.y + b.h * 0.5f;
+    const float radius = b.w * 0.5f;
+    const float alpha = (hovered || menuOpen) ? 0.95f : 0.42f;
+
+    r.drawCircleDropShadow(cx, cy, radius, 4.0f, light, alpha * 0.45f);
+    r.drawCircle(cx, cy, radius,
+                 pal.woodR0 + 0.08f, pal.woodG0 + 0.06f, pal.woodB0 + 0.05f,
+                 alpha, 24);
+
+    const float rimR = (hovered || menuOpen) ? pal.accentR : pal.trimR;
+    const float rimG = (hovered || menuOpen) ? pal.accentG : pal.trimG;
+    const float rimB = (hovered || menuOpen) ? pal.accentB : pal.trimB;
+
+    r.drawCircleOutline(cx, cy, radius, rimR, rimG, rimB, alpha, (hovered || menuOpen) ? 1.8f : 1.2f, 24);
+
+    if (menuOpen) {
+        // Draw crisp 'X' close indicator when menu is pinned/toggled on
+        const float xSize = radius * 0.38f;
+        r.drawLine(cx - xSize, cy - xSize, cx + xSize, cy + xSize, rimR, rimG, rimB, alpha, 2.2f);
+        r.drawLine(cx - xSize, cy + xSize, cx + xSize, cy - xSize, rimR, rimG, rimB, alpha, 2.2f);
+    } else {
+        // 3 sleek horizontal menu bars
+        const float barW = radius * 0.95f;
+        const float barH = 2.0f;
+        r.drawRect(cx - barW * 0.5f, cy - 6.0f, barW, barH, rimR, rimG, rimB, alpha);
+        r.drawRect(cx - barW * 0.5f, cy - 1.0f, barW, barH, rimR, rimG, rimB, alpha);
+        r.drawRect(cx - barW * 0.5f, cy + 4.0f, barW, barH, rimR, rimG, rimB, alpha);
+    }
 }
 
 void drawStaticTableChrome(
@@ -959,35 +1024,17 @@ void drawStaticTableChrome(
     const ThemePalette& pal,
     const eatsbits::ui::LightSource2D& light
 ) {
-    const float topBarH = 46.0f;
-    const float botBarH = 42.0f;
-    const float playfieldH = height - topBarH - botBarH;
-
-    // 1. Physically Lit Procedural Playfield (Rosewood, Gothic Slate, Reflective Tile, Emerald Lawn, etc.)
+    // 1. Physically Lit Procedural Playfield spanning 100% of the display
     ProceduralBackgroundSystem::instance().renderBackground(
-        r, 0.0f, topBarH, width, playfieldH, board.tableTheme(), light, board.seed()
+        r, 0.0f, 0.0f, width, height, board.tableTheme(), light, board.seed()
     );
 
-    r.drawDustSpecks(0.0f, topBarH, width, playfieldH, 30, board.seed(), pal.trimR, pal.trimG, pal.trimB, 0.12f);
+    r.drawDustSpecks(0.0f, 0.0f, width, height, 36, board.seed(), pal.trimR, pal.trimG, pal.trimB, 0.12f);
 
-    // 2. Hardwood Solitaire 3.0 Top & Bottom Carved Molding Bars
-    r.drawPatternedRectGradient(
-        0.0f, 0.0f, width, topBarH,
-        pal.woodR0, pal.woodG0, pal.woodB0,
-        pal.woodR1, pal.woodG1, pal.woodB1, 1.0f,
-        eatsbits::ui::VectorPatternType::WoodGrain, 0.12f, 10.0f, 0.0f
-    );
-    r.drawRect(0.0f, topBarH - 1.5f, width, 1.5f, pal.trimR, pal.trimG, pal.trimB, 0.75f);
+    // Subtle table perimeter border
+    r.drawRoundedRectOutline(0.0f, 0.0f, width, height, 0.0f, pal.trimR, pal.trimG, pal.trimB, 0.35f, 1.5f, 0);
 
-    r.drawPatternedRectGradient(
-        0.0f, height - botBarH, width, botBarH,
-        pal.woodR1, pal.woodG1, pal.woodB1,
-        pal.woodR0, pal.woodG0, pal.woodB0, 1.0f,
-        eatsbits::ui::VectorPatternType::WoodGrain, 0.12f, 10.0f, 0.0f
-    );
-    r.drawRect(0.0f, height - botBarH, width, 1.5f, pal.trimR, pal.trimG, pal.trimB, 0.65f);
-
-    // 3. Recessed Empty Pile Wells & Foundation Runes
+    // 2. Recessed Empty Pile Wells & Foundation Runes
     const float cw = board.cardWidth();
     const float ch = board.cardHeight();
     const float wellRadius = std::max(5.0f, cw * 0.08f);
@@ -1020,7 +1067,14 @@ void TableRenderer::renderBoard(
     int draggedCardIdx,
     float dragOffsetX,
     float dragOffsetY,
-    int hoveredButtonId
+    int hoveredButtonId,
+    bool menuOpen,
+    MenuAnchor menuAnchor,
+    bool isGesturing,
+    float gestureStartX,
+    float gestureStartY,
+    float gestureCurX,
+    float gestureCurY
 ) {
     const ThemePalette pal = getPalette(board.tableTheme());
     // Overhead table illumination: centered horizontally, situated over upper tableau, elevated 550px
@@ -1053,37 +1107,21 @@ void TableRenderer::renderBoard(
         drawStaticTableChrome(r, board, width, height, pal, light);
     }
 
-    // 2. Interactive HUD Buttons & Live Telemetry
-    auto btns = buildHudButtons(width, height, board, r.getAntiAliasingMode());
-    for (const auto& b : btns) {
-        bool hi = (b.id == BtnAutoFinish && board.canAutoFinish());
-        drawCarvedButton(r, b, b.id == hoveredButtonId, hi, pal);
-    }
-
+    // 2. Bottom-Center Live Telemetry Watermark (Seed, Score, Moves, Timer)
     int mins = static_cast<int>(board.elapsedSeconds()) / 60;
     int secs = static_cast<int>(board.elapsedSeconds()) % 60;
-    char headerRight[128];
-    if (width >= 1180.0f) {
-        std::snprintf(headerRight, sizeof(headerRight), "SEED #%u   SCORE: %d   MOVES: %u   %02d:%02d",
+    char botTelemetry[128];
+    if (width >= 720.0f) {
+        std::snprintf(botTelemetry, sizeof(botTelemetry), "SEED #%u    SCORE: %d    MOVES: %u    %02d:%02d",
                       board.seed(), board.score(), board.moveCount(), mins, secs);
     } else {
-        std::snprintf(headerRight, sizeof(headerRight), "SCORE: %d   MOVES: %u   %02d:%02d",
+        std::snprintf(botTelemetry, sizeof(botTelemetry), "SCORE: %d    MOVES: %u    %02d:%02d",
                       board.score(), board.moveCount(), mins, secs);
     }
-    const float headerTextLen = static_cast<float>(std::strlen(headerRight)) * 6.6f;
-    const float topButtonsEnd = (btns.size() > 5) ? (btns[5].x + btns[5].w) : 800.0f;
-    const float headerX = std::max(topButtonsEnd + 14.0f, width - headerTextLen - 16.0f);
-    eatsbits::ui::glyph::drawVectorText(r, headerRight, headerX, 16.0f, 12.5f,
-                                        0.94f, 0.90f, 0.82f, 0.96f);
-
-    const char* footerText = (width >= 980.0f)
-        ? "SOLITAIRE ENSHADED  |  RIGHT-CLICK OR TAP CARD FOR SMART MOVE"
-        : "RIGHT-CLICK OR TAP CARD FOR SMART MOVE";
-    const float footerLen = static_cast<float>(std::strlen(footerText)) * 6.2f;
-    const float botButtonsEnd = (btns.size() > 9) ? (btns[9].x + btns[9].w) : 540.0f;
-    const float footerX = std::max(botButtonsEnd + 16.0f, width - footerLen - 16.0f);
-    eatsbits::ui::glyph::drawVectorText(r, footerText, footerX, height - 27.0f, 11.0f,
-                                        pal.accentR, pal.accentG, pal.accentB, 0.88f);
+    const float teleLen = static_cast<float>(std::strlen(botTelemetry)) * 6.2f;
+    const float teleX = std::max(12.0f, (width - teleLen) * 0.5f);
+    eatsbits::ui::glyph::drawVectorText(r, botTelemetry, teleX, height - 16.0f, 11.5f,
+                                        pal.trimR, pal.trimG, pal.trimB, 0.52f);
 
     // 3. Resting Cards (culls buried invisible cards in Stock/Waste/Foundation!)
     const float cw = board.cardWidth();
@@ -1259,6 +1297,70 @@ void TableRenderer::renderBoard(
         eatsbits::ui::glyph::drawVectorText(r, "PRESS [N] OR CLICK NEW DEAL FOR HANDS ANEW", bx + 64.0f, by + 58.0f, 12.5f,
                                             0.94f, 0.90f, 0.82f, 0.95f);
     }
+
+    // 7. Dynamic Felt Gesture Laser Trail & Visual Hint Overlay
+    if (isGesturing) {
+        const float gdx = gestureCurX - gestureStartX;
+        const float gdy = gestureCurY - gestureStartY;
+        const float gdist = std::hypot(gdx, gdy);
+        if (gdist > 15.0f) {
+            r.drawLine(gestureStartX, gestureStartY, gestureCurX, gestureCurY,
+                       pal.accentR, pal.accentG, pal.accentB, 0.75f, 3.0f);
+            r.drawCircle(gestureCurX, gestureCurY, 5.0f,
+                         pal.accentR, pal.accentG, pal.accentB, 0.90f, 16);
+
+            const char* hintStr = nullptr;
+            if (std::abs(gdx) > std::abs(gdy) * 1.25f) {
+                hintStr = (gdx < 0.0f) ? "<-- UNDO [Z]" : "REDO [Y] -->";
+            } else if (gdy < -30.0f && std::abs(gdy) > std::abs(gdx) * 1.25f) {
+                hintStr = "^^^ AUTO-STEP [A]";
+            } else if (gdy > 30.0f && std::abs(gdy) > std::abs(gdx) * 1.25f) {
+                hintStr = "vvv NETHER SIGHT [H]";
+            }
+
+            if (hintStr) {
+                const float textLen = static_cast<float>(std::strlen(hintStr)) * 6.4f;
+                eatsbits::ui::glyph::drawVectorText(
+                    r, hintStr, gestureCurX - textLen * 0.5f, gestureCurY - 22.0f, 12.0f,
+                    pal.accentR, pal.accentG, pal.accentB, 0.95f
+                );
+            }
+        }
+    }
+
+    // 8. Always-on-Top Floating Compendium Menu & Anchor Medallion
+    auto btns = buildHudButtons(width, height, board, menuOpen, menuAnchor);
+    if (!btns.empty()) {
+        if (menuOpen && btns.size() > 1) {
+            float minX = 1e6f, minY = 1e6f, maxX = -1e6f, maxY = -1e6f;
+            for (size_t i = 1; i < btns.size(); ++i) {
+                minX = std::min(minX, btns[i].x);
+                minY = std::min(minY, btns[i].y);
+                maxX = std::max(maxX, btns[i].x + btns[i].w);
+                maxY = std::max(maxY, btns[i].y + btns[i].h);
+            }
+            const float popX = minX - 8.0f;
+            const float popY = minY - 8.0f;
+            const float popW = (maxX - minX) + 16.0f;
+            const float popH = (maxY - minY) + 16.0f;
+
+            r.drawRectDropShadow(popX, popY, popW, popH, 8.0f, 12.0f, light, 0.55f);
+            r.drawRoundedRectGradient(
+                popX, popY, popW, popH, 8.0f,
+                pal.woodR0 + 0.05f, pal.woodG0 + 0.04f, pal.woodB0 + 0.03f,
+                pal.woodR1 + 0.02f, pal.woodG1 + 0.02f, pal.woodB1 + 0.02f,
+                0.98f, 4
+            );
+            r.drawRoundedRectOutline(popX, popY, popW, popH, 8.0f, pal.trimR, pal.trimG, pal.trimB, 0.90f, 1.5f, 4);
+
+            for (size_t i = 1; i < btns.size(); ++i) {
+                const auto& b = btns[i];
+                bool hi = (b.id == BtnAutoFinish && board.canAutoFinish());
+                drawCarvedButton(r, b, b.id == hoveredButtonId, hi, pal);
+            }
+        }
+        drawMenuOrbButton(r, btns[0], hoveredButtonId == BtnMenuToggle, menuOpen, pal, light);
+    }
 }
 
 bool TableRenderer::writePngFile(
@@ -1424,11 +1526,34 @@ struct InteractiveContext {
     bool prevKeyA = false;
     bool prevKeyT = false;
     bool prevKeyD = false;
-    bool prevKeyX = false;
+    bool prevKeyW = false;
+    bool prevKeyM = false;
+    bool prevKeyEsc = false;
+    bool prevKeyF11 = false;
+    bool prevKeyEnter = false;
     bool prevKey1 = false;
     bool prevKey2 = false;
     bool prevKey3 = false;
     bool prevKey4 = false;
+
+    bool isFullscreen = false;
+    bool hasSavedWindowState = false;
+    int savedWindowX = 100;
+    int savedWindowY = 100;
+    int savedWindowW = 1280;
+    int savedWindowH = 720;
+#if defined(_WIN32) && !defined(__EMSCRIPTEN__)
+    LONG savedWindowStyle = 0;
+#endif
+
+    bool menuOpen = false;
+    MenuAnchor menuAnchor = MenuAnchor::BottomLeft;
+
+    bool isGesturing = false;
+    float gestureStartX = 0.0f;
+    float gestureStartY = 0.0f;
+    float gestureCurX = 0.0f;
+    float gestureCurY = 0.0f;
 
     bool autoCascadeActive = false;
     float autoCascadeTimer = 0.0f;
@@ -1436,6 +1561,116 @@ struct InteractiveContext {
 
     InteractiveContext(SolitaireBoard& b, AudioFoleyEngine& f, uint32_t w, uint32_t h)
         : board(b), foley(f), width(w), height(h) {}
+
+    void toggleFullscreen() noexcept {
+        setFullscreen(!isFullscreen);
+    }
+
+    void setFullscreen(bool enable) noexcept {
+        if (!window) return;
+        if (isFullscreen == enable) return;
+        isFullscreen = enable;
+
+#if defined(__EMSCRIPTEN__)
+        if (enable) {
+            EM_ASM({
+                var el = document.getElementById('canvas-container') || document.documentElement;
+                if (el.requestFullscreen) {
+                    el.requestFullscreen();
+                } else if (el.webkitRequestFullscreen) {
+                    el.webkitRequestFullscreen();
+                }
+            });
+        } else {
+            EM_ASM({
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            });
+        }
+#elif defined(_WIN32)
+        HWND hwnd = glfwGetWin32Window(window);
+        if (hwnd) {
+            if (enable) {
+                LONG style = GetWindowLong(hwnd, GWL_STYLE);
+                if (!hasSavedWindowState) {
+                    savedWindowStyle = style;
+                    RECT rect{};
+                    if (GetWindowRect(hwnd, &rect)) {
+                        savedWindowX = rect.left;
+                        savedWindowY = rect.top;
+                        savedWindowW = rect.right - rect.left;
+                        savedWindowH = rect.bottom - rect.top;
+                    }
+                    hasSavedWindowState = true;
+                }
+
+                int posX = 0;
+                int posY = 0;
+                int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+                int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
+                HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                if (hMonitor) {
+                    MONITORINFO mi{};
+                    mi.cbSize = sizeof(mi);
+                    if (GetMonitorInfoW(hMonitor, &mi)) {
+                        posX = mi.rcMonitor.left;
+                        posY = mi.rcMonitor.top;
+                        screenWidth = mi.rcMonitor.right - mi.rcMonitor.left;
+                        screenHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
+                    }
+                }
+
+                LONG newStyle = (style & ~WS_OVERLAPPEDWINDOW) | WS_POPUP | WS_VISIBLE;
+                SetWindowLong(hwnd, GWL_STYLE, newStyle);
+                SetWindowPos(hwnd, HWND_TOP, posX, posY, screenWidth, screenHeight,
+                             SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            } else {
+                LONG restoreStyle = (savedWindowStyle != 0) ? savedWindowStyle : (WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+                SetWindowLong(hwnd, GWL_STYLE, restoreStyle);
+                SetWindowPos(hwnd, HWND_TOP, savedWindowX, savedWindowY, savedWindowW, savedWindowH,
+                             SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                ShowWindow(hwnd, SW_RESTORE);
+            }
+
+            int winW = 0, winH = 0;
+            glfwGetWindowSize(window, &winW, &winH);
+            if (winW > 0 && winH > 0) {
+                width = static_cast<uint32_t>(winW);
+                height = static_cast<uint32_t>(winH);
+                renderer.resize(width, height);
+                board.computeLayout(static_cast<float>(width), static_cast<float>(height));
+            }
+        }
+#else
+        if (enable) {
+            glfwGetWindowPos(window, &savedWindowX, &savedWindowY);
+            glfwGetWindowSize(window, &savedWindowW, &savedWindowH);
+            hasSavedWindowState = true;
+            GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+            if (monitor) {
+                const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+                if (mode) {
+                    glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+                }
+            }
+        } else {
+            glfwSetWindowMonitor(window, nullptr, savedWindowX, savedWindowY, savedWindowW, savedWindowH, 0);
+        }
+        int winW = 0, winH = 0;
+        glfwGetWindowSize(window, &winW, &winH);
+        if (winW > 0 && winH > 0) {
+            width = static_cast<uint32_t>(winW);
+            height = static_cast<uint32_t>(winH);
+            renderer.resize(width, height);
+            board.computeLayout(static_cast<float>(width), static_cast<float>(height));
+        }
+#endif
+        foley.triggerSound(FoleySound::WoodClick, 0.65f);
+    }
 
     void triggerAction(int btnId) {
         switch (btnId) {
@@ -1541,10 +1776,23 @@ struct InteractiveContext {
                     foley.triggerSound(FoleySound::FoundationChime, 0.85f);
                 }
                 break;
-            case BtnAA: {
-                int nextAa = (renderer.getAntiAliasingMode() + 1) % 3;
-                renderer.setAntiAliasingMode(nextAa);
-                foley.triggerSound(FoleySound::WoodClick, 0.75f);
+            case BtnMenuToggle:
+                menuOpen = !menuOpen;
+                foley.triggerSound(FoleySound::WoodClick, 0.7f);
+                break;
+            case BtnMenuAnchor: {
+                int nextAnchor = (static_cast<int>(menuAnchor) + 1) % 4;
+                menuAnchor = static_cast<MenuAnchor>(nextAnchor);
+                foley.triggerSound(FoleySound::WoodClick, 0.65f);
+                break;
+            }
+            case BtnCardWear: {
+                int nextWear = (static_cast<int>(CardTextureCache::instance().cardWearLevel()) + 1) % static_cast<int>(CardWearLevel::Count);
+                CardTextureCache::instance().setCardWearLevel(static_cast<CardWearLevel>(nextWear));
+                if (renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
+                    CardTextureCache::instance().buildGpuAtlas(renderer);
+                }
+                foley.triggerSound(FoleySound::CardSlide, 0.75f);
                 break;
             }
             default:
@@ -1628,7 +1876,7 @@ struct InteractiveContext {
         const float fmx = static_cast<float>(mx);
         const float fmy = static_cast<float>(my);
 
-        int hoveredBtn = hitTestHudButtons(fmx, fmy, static_cast<float>(width), static_cast<float>(height), board, renderer.getAntiAliasingMode());
+        int hoveredBtn = hitTestHudButtons(fmx, fmy, static_cast<float>(width), static_cast<float>(height), board, menuOpen, menuAnchor);
 
         const bool leftDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
         const bool rightDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
@@ -1636,6 +1884,8 @@ struct InteractiveContext {
         if (leftDown && !prevLeftDown) {
             if (hoveredBtn != BtnNone) {
                 triggerAction(hoveredBtn);
+            } else if (menuOpen && isPointInsideMenuPopover(fmx, fmy, static_cast<float>(width), static_cast<float>(height), board, menuOpen, menuAnchor)) {
+                // Click within popover drawer, keep open
             } else {
                 int hitPile = -1;
                 int hitCard = -1;
@@ -1653,53 +1903,88 @@ struct InteractiveContext {
                         dragOffsetY = 0.0f;
                         foley.triggerSound(FoleySound::CardSlide, 0.55f);
                     }
+                } else {
+                    // Clicked on empty table felt -> Start Gesture!
+                    isGesturing = true;
+                    gestureStartX = fmx;
+                    gestureStartY = fmy;
+                    gestureCurX = fmx;
+                    gestureCurY = fmy;
                 }
             }
         } else if (leftDown && draggedPile >= 0) {
             dragOffsetX = static_cast<float>(fmx - dragStartMouseX);
             dragOffsetY = static_cast<float>(fmy - dragStartMouseY);
-        } else if (!leftDown && prevLeftDown && draggedPile >= 0) {
-            const float dragDist = std::hypot(dragOffsetX, dragOffsetY);
-            bool moved = false;
+        } else if (leftDown && isGesturing) {
+            gestureCurX = fmx;
+            gestureCurY = fmy;
+        } else if (!leftDown && prevLeftDown) {
+            if (draggedPile >= 0) {
+                const float dragDist = std::hypot(dragOffsetX, dragOffsetY);
+                bool moved = false;
 
-            if (draggedPile < static_cast<int>(board.piles().size()) &&
-                draggedCardIdx >= 0 &&
-                static_cast<size_t>(draggedCardIdx) < board.piles()[static_cast<size_t>(draggedPile)].cards.size()) {
+                if (draggedPile < static_cast<int>(board.piles().size()) &&
+                    draggedCardIdx >= 0 &&
+                    static_cast<size_t>(draggedCardIdx) < board.piles()[static_cast<size_t>(draggedPile)].cards.size()) {
 
-                if (dragDist <= 6.0f) {
-                    moved = board.smartMove(static_cast<uint8_t>(draggedPile), static_cast<size_t>(draggedCardIdx));
-                } else {
-                    auto& srcPile = board.piles()[static_cast<size_t>(draggedPile)];
-                    const Card& lead = srcPile.cards[static_cast<size_t>(draggedCardIdx)];
-                    const float dropCx = lead.x + dragOffsetX + board.cardWidth() * 0.5f;
-                    const float dropCy = lead.y + dragOffsetY + board.cardHeight() * 0.5f;
-                    int bestTarget = board.findBestDropPile(static_cast<uint8_t>(draggedPile),
-                                                            static_cast<size_t>(draggedCardIdx),
-                                                            dropCx, dropCy);
+                    if (dragDist <= 6.0f) {
+                        moved = board.smartMove(static_cast<uint8_t>(draggedPile), static_cast<size_t>(draggedCardIdx));
+                    } else {
+                        auto& srcPile = board.piles()[static_cast<size_t>(draggedPile)];
+                        const Card& lead = srcPile.cards[static_cast<size_t>(draggedCardIdx)];
+                        const float dropCx = lead.x + dragOffsetX + board.cardWidth() * 0.5f;
+                        const float dropCy = lead.y + dragOffsetY + board.cardHeight() * 0.5f;
+                        int bestTarget = board.findBestDropPile(static_cast<uint8_t>(draggedPile),
+                                                                static_cast<size_t>(draggedCardIdx),
+                                                                dropCx, dropCy);
 
-                    for (size_t cIdx = static_cast<size_t>(draggedCardIdx); cIdx < srcPile.cards.size(); ++cIdx) {
-                        srcPile.cards[cIdx].x += dragOffsetX;
-                        srcPile.cards[cIdx].y += dragOffsetY;
-                        srcPile.cards[cIdx].elevation = 14.0f;
+                        for (size_t cIdx = static_cast<size_t>(draggedCardIdx); cIdx < srcPile.cards.size(); ++cIdx) {
+                            srcPile.cards[cIdx].x += dragOffsetX;
+                            srcPile.cards[cIdx].y += dragOffsetY;
+                            srcPile.cards[cIdx].elevation = 14.0f;
+                        }
+
+                        if (bestTarget >= 0) {
+                            moved = board.executeMove(static_cast<uint8_t>(draggedPile),
+                                                      static_cast<size_t>(draggedCardIdx),
+                                                      static_cast<uint8_t>(bestTarget));
+                        }
                     }
+                }
 
-                    if (bestTarget >= 0) {
-                        moved = board.executeMove(static_cast<uint8_t>(draggedPile),
-                                                  static_cast<size_t>(draggedCardIdx),
-                                                  static_cast<uint8_t>(bestTarget));
+                if (moved) {
+                    foley.triggerSound(FoleySound::CardSnap, 0.85f);
+                } else if (dragDist > 6.0f) {
+                    foley.triggerSound(FoleySound::CardSlide, 0.65f);
+                }
+                draggedPile = -1;
+                draggedCardIdx = -1;
+                dragOffsetX = 0.0f;
+                dragOffsetY = 0.0f;
+            } else if (isGesturing) {
+                isGesturing = false;
+                const float gdx = gestureCurX - gestureStartX;
+                const float gdy = gestureCurY - gestureStartY;
+                const float gdist = std::hypot(gdx, gdy);
+
+                if (gdist > 36.0f) {
+                    if (std::abs(gdx) > std::abs(gdy) * 1.25f) {
+                        if (gdx < 0.0f) {
+                            // Swipe Left on Felt -> UNDO
+                            triggerAction(BtnUndo);
+                        } else {
+                            // Swipe Right on Felt -> REDO
+                            triggerAction(BtnRedo);
+                        }
+                    } else if (gdy < -30.0f && std::abs(gdy) > std::abs(gdx) * 1.25f) {
+                        // Swipe Up on Felt -> AUTO-STEP
+                        triggerAction(BtnAutoFinish);
+                    } else if (gdy > 30.0f && std::abs(gdy) > std::abs(gdx) * 1.25f) {
+                        // Swipe Down on Felt -> NETHER SIGHT
+                        triggerAction(BtnHint);
                     }
                 }
             }
-
-            if (moved) {
-                foley.triggerSound(FoleySound::CardSnap, 0.85f);
-            } else if (dragDist > 6.0f) {
-                foley.triggerSound(FoleySound::CardSlide, 0.65f);
-            }
-            draggedPile = -1;
-            draggedCardIdx = -1;
-            dragOffsetX = 0.0f;
-            dragOffsetY = 0.0f;
         }
 
         if (rightDown && !prevRightDown) {
@@ -1730,7 +2015,24 @@ struct InteractiveContext {
         if (edgeKey(GLFW_KEY_A, prevKeyA)) triggerAction(BtnAutoFinish);
         if (edgeKey(GLFW_KEY_T, prevKeyT)) triggerAction(BtnTheme);
         if (edgeKey(GLFW_KEY_D, prevKeyD)) triggerAction(BtnDeck);
-        if (edgeKey(GLFW_KEY_X, prevKeyX)) triggerAction(BtnAA);
+        if (edgeKey(GLFW_KEY_W, prevKeyW)) triggerAction(BtnCardWear);
+        if (edgeKey(GLFW_KEY_M, prevKeyM)) triggerAction(BtnMenuToggle);
+        if (edgeKey(GLFW_KEY_ESCAPE, prevKeyEsc)) { if (menuOpen) menuOpen = false; }
+
+        // F11 or Alt+Enter: Fullscreen Toggle (matching Eatsbits standard)
+        const bool isAlt = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) ||
+                           (glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
+        const bool keyEnter = (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) ||
+                              (glfwGetKey(window, GLFW_KEY_KP_ENTER) == GLFW_PRESS);
+        const bool keyF11 = glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS;
+
+        const bool isFullscreenTrigger = (keyF11 && !prevKeyF11) || (isAlt && keyEnter && !prevKeyEnter);
+        prevKeyF11 = keyF11;
+        prevKeyEnter = keyEnter;
+
+        if (isFullscreenTrigger) {
+            toggleFullscreen();
+        }
         if (edgeKey(GLFW_KEY_1, prevKey1)) { board.newDeal(board.seed(), GameVariant::KlondikeDraw1); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
         if (edgeKey(GLFW_KEY_2, prevKey2)) { board.newDeal(board.seed(), GameVariant::KlondikeDraw3); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
         if (edgeKey(GLFW_KEY_3, prevKey3)) { board.newDeal(board.seed(), GameVariant::FreeCell);      foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
@@ -1753,7 +2055,8 @@ struct InteractiveContext {
         if (width > 0 && height > 0) {
             renderer.beginFrame(static_cast<float>(width), static_cast<float>(height));
             TableRenderer::renderBoard(renderer, board, static_cast<float>(width), static_cast<float>(height),
-                                       draggedPile, draggedCardIdx, dragOffsetX, dragOffsetY, hoveredBtn);
+                                       draggedPile, draggedCardIdx, dragOffsetX, dragOffsetY, hoveredBtn,
+                                       menuOpen, menuAnchor, isGesturing, gestureStartX, gestureStartY, gestureCurX, gestureCurY);
             renderer.endFrame();
         }
     }

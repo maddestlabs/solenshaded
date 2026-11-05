@@ -2,6 +2,7 @@
 #define SOLENSHADED_PROCEDURAL_BACKGROUND_HPP
 
 #include "solenshaded/solitaire_types.hpp"
+#include "solenshaded/proctex_api.hpp"
 #include "eatsbits/ui/batch_renderer_2d.hpp"
 #include "eatsbits/ui/geometry.hpp"
 #include <cstdint>
@@ -15,16 +16,17 @@ namespace solenshaded {
  * Blinn-Phong specular sheen, and radial distance falloff.
  * 
  * Supports seamless normal-mapped PBR materials:
- * - Rosewood Parlor (AmbientCG Wood049: growth rings, longitudinal pores, satin varnish)
- * - Tavern Heartwood (AmbientCG WoodFloor051: chiseled parquet planks, oiled oak sheen)
- * - Emerald Lawn (AmbientCG Fabric037 / Carpet012: rich woven baize felt)
+ * - Emerald Lawn (AmbientCG Carpet012: rich woven baize felt)
  * - Hopsack Tweed (AmbientCG Fabric063: tactile 2x2 multi-ply wool yarn weave)
- * - Denim Chambray (AmbientCG Fabric077: indigo twill weft relief)
+ * - Denim Chambray (AmbientCG Fabric061: indigo twill weft relief)
  * - Striped Jersey (AmbientCG Fabric079: ribbed knit jersey texture)
- * - Reflective Tile (AmbientCG Tiles052: glazed subway tile with specular hotspot)
- * - Carved Stone (AmbientCG Rocks011: chiseled mineral paver relief)
  * - Sunken Sanctum (AmbientCG Onyx013: polished dark obsidian veins)
- * - Perilous Shores (AmbientCG Ground091 / Moss002: weathered coastal earth)
+ * - Perilous Shores (AmbientCG Moss002: weathered coastal earth)
+ * - Pebbled Cowhide (Embossed pebble grain cowhide leather)
+ * - Distressed Leather (AmbientCG Leather006: aniline nubuck)
+ * - Painted Wood (AmbientCG PaintedWood008C: weathered barnwood)
+ * - Pixel Dungeon Brick (Retro 16x16 dungeon brick wall)
+ * - Pixel Emerald Water (Retro 32x32 aquatic shimmering water)
  */
 class ProceduralBackgroundSystem {
 public:
@@ -65,6 +67,20 @@ public:
      * Check if a PBR material is available for the given theme.
      */
     [[nodiscard]] bool hasPbrMaterial(TableThemeId theme) const noexcept;
+
+    /**
+     * Check if a procedural .eat material script is available for the given theme.
+     */
+    [[nodiscard]] bool hasProceduralMaterial(TableThemeId theme) const noexcept;
+
+    /**
+     * Load a procedural background theme directly from an .eat script or script source.
+     * Bakes the procedural PBR material in host memory and overrides the table surface.
+     */
+    bool loadProceduralTheme(
+        const std::string& scriptPathOrSource,
+        const ProceduralBakeOptions& options = {}
+    );
 
     /**
      * Load a custom background theme directly from a single-file .eats package.

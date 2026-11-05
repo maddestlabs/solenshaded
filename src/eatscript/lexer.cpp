@@ -69,6 +69,8 @@ static const std::unordered_map<std::string, TokenType> kKeywords = {
     {"import", TokenType::Import},
     {"True", TokenType::TrueLiteral},
     {"False", TokenType::FalseLiteral},
+    {"true", TokenType::TrueLiteral},
+    {"false", TokenType::FalseLiteral},
 };
 
 Lexer::Lexer(std::string source) : source_(std::move(source)) {

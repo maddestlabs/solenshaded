@@ -77,11 +77,33 @@ elseif(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
     target_link_libraries(solenshaded_core PUBLIC pthread dl m)
 endif()
 
+# 3b. EatsTextures Procedural Synthesis Core (Headless SIMD Synthesis)
+add_library(eats_proctex_core STATIC
+    src/proctex/field_ops.cpp
+    src/proctex/proctex_runtime.cpp
+    src/proctex/png_io.cpp
+)
+target_include_directories(eats_proctex_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
+)
+target_link_libraries(eats_proctex_core PUBLIC eats_script)
+if(NOT EMSCRIPTEN)
+    if(MSVC)
+        target_compile_options(eats_proctex_core PRIVATE /openmp)
+    else()
+        target_compile_options(eats_proctex_core PRIVATE -fopenmp)
+        target_link_libraries(eats_proctex_core PUBLIC -fopenmp)
+    endif()
+endif()
+
 # 4. SolEnshaded Procedural Table Renderer Library
 add_library(solenshaded_render STATIC
     src/render/table_renderer.cpp
     src/render/card_texture_cache.cpp
+    src/render/card_canvas.cpp
     src/render/procedural_background.cpp
+    src/render/proctex_api.cpp
 )
 target_include_directories(solenshaded_render PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -97,7 +119,7 @@ endif()
 if(EMSCRIPTEN)
     target_compile_options(solenshaded_core PUBLIC --use-port=emdawnwebgpu)
     target_compile_options(solenshaded_render PUBLIC --use-port=emdawnwebgpu)
-    target_link_libraries(solenshaded_render PUBLIC solenshaded_core)
+    target_link_libraries(solenshaded_render PUBLIC solenshaded_core eats_proctex_core)
 
     # 5. Main SolEnshaded WebAssembly & WebGPU Application
     add_executable(solenshaded_web src/main.cpp)
@@ -107,7 +129,7 @@ if(EMSCRIPTEN)
     set_target_properties(solenshaded_web PROPERTIES
         OUTPUT_NAME "solenshaded"
         SUFFIX ".html"
-        LINK_FLAGS "-O3 -msimd128 -sNO_EXIT_RUNTIME=1 -fexceptions --use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1 -sEXPORTED_FUNCTIONS=['_main','_solenshaded_load_file_from_web'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS'] --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/classic.eats@/decks/classic.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/themes/rosewood_parlor.eats@/themes/rosewood_parlor.eats --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
+        LINK_FLAGS "-O3 -msimd128 -sNO_EXIT_RUNTIME=1 -fexceptions --use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1 -sEXPORTED_FUNCTIONS=['_main','_solenshaded_load_file_from_web'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS'] --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/classic.eats@/decks/classic.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/themes/emerald_lawn.eats@/themes/emerald_lawn.eats --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
     )
     add_custom_command(TARGET solenshaded_web POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -122,7 +144,7 @@ if(EMSCRIPTEN)
         COMMENT "Copying PWA manifest, service worker, and index.html to web root"
     )
 else()
-    target_link_libraries(solenshaded_render PUBLIC solenshaded_core glfw)
+    target_link_libraries(solenshaded_render PUBLIC solenshaded_core eats_proctex_core glfw)
     if(WIN32)
         set(WGPU_NATIVE_LIB "${CMAKE_CURRENT_SOURCE_DIR}/third_party/wgpu/lib/wgpu_native.dll.lib")
         target_link_libraries(solenshaded_render PUBLIC
