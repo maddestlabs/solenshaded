@@ -56,9 +56,10 @@ jobs:
           cp -f build-web/manifest.json dist/
           cp -f build-web/sw.js dist/
 
-          # Stage on-demand decks (available statically on GitHub Pages)
-          mkdir -p dist/decks
-          cp -f decks/steampunk.eats dist/decks/
+          # Stage on-demand decks and themes (available statically on GitHub Pages)
+          mkdir -p dist/decks dist/themes
+          cp -rf decks/* dist/decks/
+          cp -rf themes/* dist/themes/
 
           # Disable Jekyll processing on GitHub Pages
           touch dist/.nojekyll

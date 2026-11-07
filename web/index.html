@@ -212,17 +212,6 @@
             opacity: 1;
         }
 
-        /* Floating Luxury Web Toolbar */
-        .sol-web-toolbar {
-            position: absolute;
-            bottom: 12px;
-            right: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 1000;
-        }
-
         .sol-web-btn {
             background: rgba(13, 23, 15, 0.88);
             border: 1px solid #3c5440;
@@ -255,12 +244,6 @@
 
         .sol-web-btn:active {
             transform: translateY(0);
-        }
-
-        .sol-web-btn.active-steampunk {
-            border-color: #d4af37;
-            color: #fef08a;
-            background: rgba(34, 56, 38, 0.95);
         }
 
         /* Modal Dialog for Gist / URL Import */
@@ -370,30 +353,14 @@
     <!-- Hidden File Picker for manual file loading -->
     <input type="file" id="eats-file-picker" accept=".eats,.jpg,.jpeg,.png,.svg" style="display: none;">
 
-    <!-- Floating Luxury Web Toolbar -->
-    <div class="sol-web-toolbar">
-        <button id="btn-load-baroque" class="sol-web-btn" title="Stream Baroque Arches Masterpiece Deck on demand (4MB)">
-            <span>🏛️</span>
-            <span id="btn-baroque-label">Baroque Arches</span>
-        </button>
-        <button id="btn-load-steampunk" class="sol-web-btn" title="Stream high-res Steampunk AI Deck on demand (6.5MB)">
-            <span>⚜️</span>
-            <span id="btn-steampunk-label">Steampunk Deck</span>
-        </button>
-        <button id="btn-open-gist-modal" class="sol-web-btn" title="Load custom deck or theme from Gist or raw URL">
-            <span>🔗</span>
-            <span>Import Gist / URL</span>
-        </button>
-    </div>
-
     <!-- Gist / URL Modal Dialog -->
     <div id="sol-modal-backdrop">
         <div class="sol-modal-box">
             <div class="sol-modal-title">LOAD .EATS RECIPE</div>
             <div class="sol-modal-desc">
-                Enter a GitHub Gist ID, full Gist URL, or any raw <span style="color:#e8d08c; font-family:'Roboto Mono',monospace;">.eats</span> link:
+                Enter a GitHub repo URL, Gist ID, deck name (e.g. <span style="color:#e8d08c; font-family:'Roboto Mono',monospace;">baroque_arches</span>), or any raw link:
             </div>
-            <input type="text" id="sol-modal-url-input" class="sol-modal-input" placeholder="e.g. 7f8a9b... or https://gist.github.com/...">
+            <input type="text" id="sol-modal-url-input" class="sol-modal-input" placeholder="e.g. baroque_arches, github.com/.../baroque_arches.eats, or Gist ID">
             <div class="sol-modal-actions">
                 <button id="btn-modal-cancel" class="sol-web-btn">Cancel</button>
                 <button id="btn-modal-submit" class="sol-web-btn" style="border-color:#d4af37; color:#fef08a;">Load Recipe</button>
@@ -505,14 +472,66 @@
             }
         }
 
-        async function loadEatsFromUrl(url, displayName = '') {
-            let filename = displayName || url.split('/').pop().split('?')[0] || 'imported.eats';
+        function resolveDeckUrl(input) {
+            let s = input.trim();
+            // 1. Shorthand single deck name (e.g. "baroque_arches" or "baroque_arches.eats")
+            if (!s.includes('/') && !s.includes(':')) {
+                const stem = s.endsWith('.eats') ? s.slice(0, -5) : s;
+                return {
+                    primary: `./decks/${stem}.eats`,
+                    fallback: `https://raw.githubusercontent.com/maddestlabs/solenshaded/main/decks/${stem}.eats`,
+                    filename: `${stem}.eats`
+                };
+            }
+            // 2. Relative decks/ path (e.g. "decks/baroque_arches.eats" or "./decks/baroque_arches.eats")
+            if (s.startsWith('./decks/') || s.startsWith('decks/')) {
+                const fname = s.split('/').pop().split('?')[0];
+                return {
+                    primary: `./decks/${fname}`,
+                    fallback: `https://raw.githubusercontent.com/maddestlabs/solenshaded/main/decks/${fname}`,
+                    filename: fname
+                };
+            }
+            // 3. GitHub Web blob URL -> raw.githubusercontent.com
+            // e.g. https://github.com/maddestlabs/solenshaded/blob/main/decks/baroque_arches.eats
+            if (s.includes('github.com/') && s.includes('/blob/')) {
+                const rawUrl = s.replace('github.com/', 'raw.githubusercontent.com/').replace('/blob/', '/');
+                const fname = rawUrl.split('/').pop().split('?')[0];
+                return { primary: rawUrl, fallback: null, filename: fname };
+            }
+            // 4. Shorthand GitHub repo path: user/repo/...
+            if (!s.startsWith('http://') && !s.startsWith('https://') && s.includes('/')) {
+                const parts = s.split('/');
+                let rawUrl = '';
+                if (parts.length >= 4 && (parts[2] === 'main' || parts[2] === 'master')) {
+                    rawUrl = `https://raw.githubusercontent.com/${s}`;
+                } else if (parts.length >= 3) {
+                    rawUrl = `https://raw.githubusercontent.com/${parts[0]}/${parts[1]}/main/${parts.slice(2).join('/')}`;
+                }
+                if (rawUrl) {
+                    const fname = rawUrl.split('/').pop().split('?')[0];
+                    return { primary: rawUrl, fallback: null, filename: fname };
+                }
+            }
+            // 5. Standard raw URL
+            const fname = s.split('/').pop().split('?')[0] || 'imported.eats';
+            return { primary: s, fallback: null, filename: fname };
+        }
+
+        async function loadEatsFromUrl(urlInput, displayName = '') {
+            const resolved = resolveDeckUrl(urlInput);
+            let filename = displayName || resolved.filename;
             if (!filename.endsWith('.eats')) filename += '.eats';
 
             showToast('Downloading ' + filename + ' ...', 10000);
 
             try {
-                const response = await fetch(url);
+                let response = await fetch(resolved.primary);
+                if (!response.ok && resolved.fallback) {
+                    console.warn(`[Web Loader] Primary ${resolved.primary} returned HTTP ${response.status}; retrying via GitHub repo fallback: ${resolved.fallback}`);
+                    showToast(`Fetching ${filename} from GitHub repo...`, 6000);
+                    response = await fetch(resolved.fallback);
+                }
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status} ${response.statusText}`);
                 }
@@ -648,12 +667,17 @@
                 }
             }
 
-            const success = await loadEatsFromUrl('./decks/baroque_arches.eats', 'baroque_arches.eats');
+            const success = await loadEatsFromUrl('baroque_arches', 'baroque_arches.eats');
             if (success) {
                 isBaroqueActive = true;
                 if (btnLabel) btnLabel.innerText = 'Classic SVG Deck';
                 if (btn) btn.classList.add('active-steampunk');
             }
+        };
+
+        window.loadDeckByName = async function(name) {
+            const cleanName = name.replace(/\.eats$/, '');
+            return await loadEatsFromUrl(cleanName, cleanName + '.eats');
         };
 
         let isSteampunkActive = false;
@@ -695,8 +719,8 @@
                 }
             }
 
-            // Otherwise, stream download from static ./decks/steampunk.eats
-            const success = await loadEatsFromUrl('./decks/steampunk.eats', 'steampunk.eats');
+            // Otherwise, stream download from static ./decks/steampunk.eats (with GitHub repo fallback)
+            const success = await loadEatsFromUrl('steampunk', 'steampunk.eats');
             if (success) {
                 isSteampunkActive = true;
                 if (btnLabel) btnLabel.innerText = 'Classic SVG Deck';
@@ -755,45 +779,40 @@
         };
 
         function setupWebControls() {
-            const btnBaroque = document.getElementById('btn-load-baroque');
-            if (btnBaroque) {
-                btnBaroque.addEventListener('click', () => {
-                    window.loadBaroqueDeck();
-                });
-            }
-
-            const btnSteampunk = document.getElementById('btn-load-steampunk');
-            if (btnSteampunk) {
-                btnSteampunk.addEventListener('click', () => {
-                    window.loadSteampunkDeck();
-                });
-            }
-
             const modal = document.getElementById('sol-modal-backdrop');
-            const btnOpenModal = document.getElementById('btn-open-gist-modal');
             const btnCancelModal = document.getElementById('btn-modal-cancel');
             const btnSubmitModal = document.getElementById('btn-modal-submit');
             const urlInput = document.getElementById('sol-modal-url-input');
 
-            if (btnOpenModal && modal) {
-                btnOpenModal.addEventListener('click', () => {
+            window.openImportModal = function() {
+                if (modal) {
                     modal.classList.add('active');
                     if (urlInput) {
                         urlInput.value = '';
                         setTimeout(() => urlInput.focus(), 100);
                     }
-                });
-            }
+                }
+            };
+
+            window.closeImportModal = function() {
+                if (modal) modal.classList.remove('active');
+            };
+
+            // Keyboard shortcut: Ctrl+O or Cmd+O opens import modal
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+                    e.preventDefault();
+                    window.openImportModal();
+                }
+            });
 
             if (btnCancelModal && modal) {
-                btnCancelModal.addEventListener('click', () => {
-                    modal.classList.remove('active');
-                });
+                btnCancelModal.addEventListener('click', window.closeImportModal);
             }
 
             if (modal) {
                 modal.addEventListener('click', (e) => {
-                    if (e.target === modal) modal.classList.remove('active');
+                    if (e.target === modal) window.closeImportModal();
                 });
             }
 
@@ -801,7 +820,7 @@
                 const submitAction = async () => {
                     const val = urlInput.value.trim();
                     if (!val) return;
-                    modal.classList.remove('active');
+                    window.closeImportModal();
                     if (val.includes('gist.github.com') || (!val.startsWith('http') && val.length >= 20 && !val.includes('/'))) {
                         await loadFromGist(val);
                     } else {
@@ -811,7 +830,7 @@
                 btnSubmitModal.addEventListener('click', submitAction);
                 urlInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') submitAction();
-                    if (e.key === 'Escape') modal.classList.remove('active');
+                    if (e.key === 'Escape') window.closeImportModal();
                 });
             }
         }

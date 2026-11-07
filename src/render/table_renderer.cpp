@@ -2171,22 +2171,50 @@ struct InteractiveContext {
                     }
                 }
 #if defined(__EMSCRIPTEN__)
-                // Skip offline-only heavy baroque decks on web if not present in MEMFS
-                if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueNoir ||
-                    static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueLight ||
-                    static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueDark) {
+                if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueNoir) {
                     std::error_code ec;
-                    bool hasBaroque = std::filesystem::exists("decks/baroque_noir.eats", ec) ||
-                                      std::filesystem::exists("/decks/baroque_noir.eats", ec) ||
-                                      std::filesystem::exists("decks/baroque_light.eats", ec) ||
-                                      std::filesystem::exists("/decks/baroque_light.eats", ec) ||
-                                      std::filesystem::exists("decks/baroque_dark.eats", ec) ||
-                                      std::filesystem::exists("/decks/baroque_dark.eats", ec);
-                    if (!hasBaroque) {
-                        nextDeck = static_cast<uint8_t>(DeckThemeId::SolEnshade);
+                    bool exists = std::filesystem::exists("decks/baroque_arches.eats", ec) ||
+                                  std::filesystem::exists("/decks/baroque_arches.eats", ec) ||
+                                  std::filesystem::exists("decks/baroque_noir.eats", ec) ||
+                                  std::filesystem::exists("/decks/baroque_noir.eats", ec) ||
+                                  std::filesystem::exists("/user/baroque_arches.eats", ec);
+                    if (!exists) {
+                        EM_ASM({
+                            if (window.loadBaroqueDeck) {
+                                window.loadBaroqueDeck();
+                            } else if (window.loadDeckByName) {
+                                window.loadDeckByName('baroque_arches');
+                            }
+                        });
+                        break;
                     }
-                }
-                if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::SteampunkAi) {
+                } else if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueLight) {
+                    std::error_code ec;
+                    bool exists = std::filesystem::exists("decks/baroque_light.eats", ec) ||
+                                  std::filesystem::exists("/decks/baroque_light.eats", ec) ||
+                                  std::filesystem::exists("decks/baroque_alabaster.eats", ec) ||
+                                  std::filesystem::exists("/decks/baroque_alabaster.eats", ec);
+                    if (!exists) {
+                        EM_ASM({
+                            if (window.loadDeckByName) {
+                                window.loadDeckByName('baroque_light');
+                            }
+                        });
+                        break;
+                    }
+                } else if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueDark) {
+                    std::error_code ec;
+                    bool exists = std::filesystem::exists("decks/baroque_dark.eats", ec) ||
+                                  std::filesystem::exists("/decks/baroque_dark.eats", ec);
+                    if (!exists) {
+                        EM_ASM({
+                            if (window.loadDeckByName) {
+                                window.loadDeckByName('baroque_dark');
+                            }
+                        });
+                        break;
+                    }
+                } else if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::SteampunkAi) {
                     std::error_code ec;
                     bool exists = std::filesystem::exists("decks/steampunk.eats", ec) ||
                                   std::filesystem::exists("/decks/steampunk.eats", ec) ||
@@ -2195,6 +2223,8 @@ struct InteractiveContext {
                         EM_ASM({
                             if (window.loadSteampunkDeck) {
                                 window.loadSteampunkDeck();
+                            } else if (window.loadDeckByName) {
+                                window.loadDeckByName('steampunk');
                             }
                         });
                         break;
@@ -2208,6 +2238,8 @@ struct InteractiveContext {
                         EM_ASM({
                             if (window.loadAnimeDeck) {
                                 window.loadAnimeDeck();
+                            } else if (window.loadDeckByName) {
+                                window.loadDeckByName('anime');
                             }
                         });
                         break;
@@ -2221,6 +2253,8 @@ struct InteractiveContext {
                         EM_ASM({
                             if (window.loadCyberpunkDeck) {
                                 window.loadCyberpunkDeck();
+                            } else if (window.loadDeckByName) {
+                                window.loadDeckByName('cyberpunk');
                             }
                         });
                         break;

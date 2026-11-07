@@ -318,6 +318,37 @@ void renderVectorFallback(
         case TableThemeId::PerilousShores:
             renderPerilousShores(r, x, y, w, h, light, seed);
             break;
+        case TableThemeId::PebbledCowhide:
+            r.drawRect(x, y, w, h, 0.20f, 0.13f, 0.08f, 1.0f);
+            r.drawDustSpecks(x, y, w, h, 60, seed, 0.12f, 0.07f, 0.04f, 0.25f);
+            r.drawRectVignette(x, y, w, h, 0.0f, 0.35f, 0.08f, 0.05f, 0.03f);
+            break;
+        case TableThemeId::LeatherNubuck:
+            r.drawRect(x, y, w, h, 0.22f, 0.16f, 0.12f, 1.0f);
+            r.drawDustSpecks(x, y, w, h, 50, seed, 0.15f, 0.10f, 0.07f, 0.20f);
+            r.drawRectVignette(x, y, w, h, 0.0f, 0.30f, 0.10f, 0.07f, 0.05f);
+            break;
+        case TableThemeId::PaintedWood:
+            r.drawRect(x, y, w, h, 0.24f, 0.27f, 0.26f, 1.0f);
+            r.drawPatternedRectGradient(x, y, w, h,
+                                        0.24f, 0.27f, 0.26f, 0.18f, 0.20f, 0.20f, 1.0f,
+                                        eatsbits::ui::VectorPatternType::WoodGrain, 0.12f, 20.0f, 0.0f);
+            r.drawRectVignette(x, y, w, h, 0.0f, 0.30f, 0.08f, 0.10f, 0.10f);
+            break;
+        case TableThemeId::PixelDungeon:
+            r.drawRect(x, y, w, h, 0.15f, 0.17f, 0.27f, 1.0f);
+            r.drawPatternedRectGradient(x, y, w, h,
+                                        0.18f, 0.20f, 0.30f, 0.12f, 0.14f, 0.22f, 1.0f,
+                                        eatsbits::ui::VectorPatternType::DotGrid, 0.18f, 24.0f, 0.0f);
+            r.drawRectVignette(x, y, w, h, 0.0f, 0.45f, 0.04f, 0.05f, 0.10f);
+            break;
+        case TableThemeId::PixelWater:
+            r.drawRect(x, y, w, h, 0.07f, 0.31f, 0.54f, 1.0f);
+            r.drawPatternedRectGradient(x, y, w, h,
+                                        0.10f, 0.40f, 0.65f, 0.04f, 0.22f, 0.42f, 1.0f,
+                                        eatsbits::ui::VectorPatternType::DiagonalMesh, 0.15f, 16.0f, 0.0f);
+            r.drawRectVignette(x, y, w, h, 0.0f, 0.35f, 0.02f, 0.12f, 0.25f);
+            break;
         default:
             renderLinenCanvas(r, x, y, w, h, 0.08f, 0.28f, 0.14f, light, seed);
             break;

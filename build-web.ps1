@@ -158,13 +158,21 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "`n[+] Build successful!" -ForegroundColor Green
 
-# Stage on-demand decks (served statically alongside WASM without payload bloat)
+# Stage on-demand decks and themes (served statically alongside WASM without payload bloat)
 $webDecksDir = Join-Path $buildDir "decks"
 if (-not (Test-Path $webDecksDir)) {
     New-Item -ItemType Directory -Path $webDecksDir -Force | Out-Null
 }
-Get-ChildItem -Path (Join-Path $rootDir "decks") -Filter "*.eats" | ForEach-Object {
+Get-ChildItem -Path (Join-Path $rootDir "decks") | ForEach-Object {
     Copy-Item -Path $_.FullName -Destination (Join-Path $webDecksDir $_.Name) -Force
+}
+
+$webThemesDir = Join-Path $buildDir "themes"
+if (-not (Test-Path $webThemesDir)) {
+    New-Item -ItemType Directory -Path $webThemesDir -Force | Out-Null
+}
+Get-ChildItem -Path (Join-Path $rootDir "themes") | ForEach-Object {
+    Copy-Item -Path $_.FullName -Destination (Join-Path $webThemesDir $_.Name) -Force
 }
 
 # ------------------------------------------------------------------
