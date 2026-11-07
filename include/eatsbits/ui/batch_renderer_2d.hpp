@@ -22,7 +22,8 @@ struct alignas(16) Vertex2D {
     float v{0.0f};
     uint32_t color{0xFFFFFFFF}; // RGBA8 packed
     uint32_t mode{0};          // 0 = solid/gradient color, 1 = font atlas texture, 2 = analytical, 3 = rgba texture, 4 = monospace font atlas, 5 = opaque mesh, 6 = bg texture
-    float pad[2]{0.0f, 0.0f};  // 32-byte uniform alignment
+    float pad[2]{0.0f, 0.0f};  // 16-byte aligned auxiliary parameters (scratch distortion / SDF bounds)
+    float localUV[2]{0.0f, 0.0f}; // [0, 1] normalized element-relative coordinate for GPU fragment lighting & bevels
 };
 
 namespace VertexMode {
@@ -91,6 +92,10 @@ public:
         }
     }
     virtual void applyBackdropBlur(float /*radius*/ = 3.0f, float /*dimFactor*/ = 0.50f) {}
+    virtual void setGlobalLight(const LightSource2D& /*light*/,
+                                float /*colR*/ = 1.04f, float /*colG*/ = 1.00f, float /*colB*/ = 0.94f,
+                                float /*ambR*/ = 0.35f, float /*ambG*/ = 0.35f, float /*ambB*/ = 0.35f) {}
+    virtual void setShaderTime(float /*timeSeconds*/) {}
     virtual void setScissorRect(float /*x*/, float /*y*/, float /*w*/, float /*h*/) {}
     virtual void clearScissorRect() {}
     virtual void* getNativeDevice() const noexcept { return nullptr; }
@@ -215,6 +220,12 @@ public:
     void setBlendMode(BlendMode mode);
     [[nodiscard]] BlendMode getBlendMode() const noexcept { return blendMode_; }
 
+    // --- Dynamic Lighting & Shading ---
+    void setGlobalLight(const LightSource2D& light,
+                        float colR = 1.04f, float colG = 1.00f, float colB = 0.94f,
+                        float ambR = 0.35f, float ambG = 0.35f, float ambB = 0.35f);
+    void setShaderTime(float timeSeconds);
+
     // --- Vector Primitives ---
     void drawTriangle(float x0, float y0, float x1, float y1, float x2, float y2, float r, float g, float b, float a = 1.0f);
     void drawTriangleTextured(float x0, float y0, float u0, float v0,
@@ -222,7 +233,8 @@ public:
                               float x2, float y2, float u2, float v2,
                               float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f);
     void drawTexturedPolygon(const Point2D* points, const Point2D* uvs, size_t count,
-                             float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f);
+                             float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
+                             float scratchDistortion = 0.0f);
     void drawConvexPolygon(const Point2D* points, size_t count, float r, float g, float b, float a = 1.0f);
     void drawConvexPolygonGradient(const Point2D* points, size_t count,
                                    float r0, float g0, float b0,
@@ -252,7 +264,8 @@ public:
     void drawTexturedRoundedRectGpu(
         float x, float y, float w, float h, float radius,
         float u0, float v0, float u1, float v1,
-        float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f
+        float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
+        float scratchDistortion = 0.0f
     );
     void drawQuadTextured3D(
         float x0, float y0, float u0, float v0,

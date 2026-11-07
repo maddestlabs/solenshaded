@@ -1,0 +1,133 @@
+# SolEnshaded Deck Recipe — Imperial Baroque (Procedural 3D Bas-Relief)
+# 100% procedural card deck generated via Eatscript without bitmaps.
+# Museum-grade baroque playing cards featuring sculpted rocaille cartouches,
+# fluted acanthus foliage, monumental baroque Ace of Spades, and antique gold filigree.
+
+sol.set_theme({
+    id: "imperial_baroque",
+    name: "Imperial Baroque (Procedural Relief)",
+    author: "SolEnshaded Procedural Engine",
+    description: "Museum-grade baroque playing cards with sculpted bas-relief, antique gold filigree, and ivory accents.",
+    version: 2,
+    corner_radius: 6.0
+})
+
+def on_draw_card_face(ctx, rank, suit, w, h):
+    is_red = (suit == "hearts" or suit == "diamonds")
+    pip_color = "#14151a"
+    if is_red:
+        pip_color = "#b81424"
+
+    gold_trim    = "#d4af37"
+    gold_deep    = "#8c7220"
+    ivory_card   = "#f7f3e8"
+    ivory_accent = "#ede5d4"
+
+    cx = w * 0.5
+    cy = h * 0.5
+    is_court = (rank == "J" or rank == "Q" or rank == "K")
+    is_ace   = (rank == "A")
+
+    # 1. Base ivory card plate with layered gold borders
+    ctx.fill_rounded_rect(0, 0, w, h, 6.0, ivory_card)
+    ctx.stroke_rounded_rect(0, 0, w, h, 6.0, gold_trim, 2.0)
+    ctx.stroke_rounded_rect(3.5, 3.5, w - 7.0, h - 7.0, 4.0, gold_deep, 1.0)
+
+    # 2. Beaded pearl perimeter
+    ctx.repeat_beads(inset=12.0, radius=2.2, spacing=8.0, color=gold_trim)
+    ctx.stroke_rounded_rect(17.0, 17.0, w - 34.0, h - 34.0, 3.5, ivory_accent, 0.8)
+
+    # 3. Corner Baroque Acanthus Vignettes (Quad-Symmetrical)
+    corner_size = 38.0
+    if is_ace or is_court:
+        corner_size = 50.0
+
+    ctx.begin_symmetry(mirror_x=True, mirror_y=True)
+    ctx.draw_baroque_corner(22.0, 22.0, corner_size, gold_trim, gold_deep)
+    ctx.end_symmetry()
+
+    # 4. Central Presentation based on Card Type
+    if is_ace:
+        # Monumental Ace Centerpiece framed by Baroque Diamond Cartouche
+        rx = w * 0.38
+        ry = h * 0.34
+        ctx.draw_baroque_cartouche(cx, cy, rx, ry, gold_trim, gold_deep, 2.6)
+        ctx.draw_baroque_crest(cx, cy - ry * 1.02, 1.0, gold_trim, gold_deep, False)
+        ctx.draw_baroque_crest(cx, cy + ry * 1.02, 1.0, gold_trim, gold_deep, True)
+
+        if suit == "spades":
+            # Monumental Baroque Spade with relief bevels & dual internal volutes
+            ctx.draw_baroque_spade(cx, cy, w * 0.44, pip_color, gold_trim, gold_deep)
+        else:
+            ctx.draw_ornate_suit(suit, cx=cx, cy=cy, size=w * 0.38, body_color=pip_color, filigree_color=gold_trim)
+
+    elif is_court:
+        margin_x = w * 0.19
+        margin_y = h * 0.17
+        inner_w  = w - margin_x * 2.0
+        inner_h  = h - margin_y * 2.0
+        ctx.draw_court(rank, suit, margin_x, margin_y, inner_w, inner_h, 1.0, gold_trim)
+
+    else:
+        # Number cards (2 - 10):
+        # Elegant open layout with delicate inner hairline filigree cartouche
+        # allowing pips to remain crisp, prominent, and uncluttered
+        rx = w * 0.35
+        ry = h * 0.30
+        ctx.stroke_cartouche(cx, cy, rx=rx, ry=ry, style="baroque_oval", color=gold_trim, line_width=1.2)
+        ctx.draw_pip_layout(rank, suit, w, h, color=pip_color)
+
+    # 5. Corner Indices (Rank glyph + suit pip with +3px padding)
+    ctx.draw_corner_indices(rank, suit, w, h, color=pip_color, font_size=26.0)
+
+    # 6. Apply sculpted micro-relief finish (< 1ms)
+    ctx.apply_finish(style="relief", light_azimuth=135.0, light_elevation=48.0, ao_intensity=1.2, relief_depth=3.0)
+
+def on_draw_card_back(ctx, w, h):
+    gold_trim  = "#d4af37"
+    gold_deep  = "#8c7220"
+    ivory_trim = "#eadeca"
+    slate_bg   = "#101115"
+    slate_card = "#16171e"
+
+    cx = w * 0.5
+    cy = h * 0.5
+
+    # 1. Base plate with layered gold borders
+    ctx.fill_rounded_rect(0, 0, w, h, 6.0, slate_bg)
+    ctx.fill_rounded_rect(3.0, 3.0, w - 6.0, h - 6.0, 4.5, slate_card)
+    ctx.stroke_rounded_rect(0, 0, w, h, 6.0, gold_trim, 2.0)
+    ctx.stroke_rounded_rect(4.0, 4.0, w - 8.0, h - 8.0, 4.0, gold_deep, 1.0)
+
+    # 2. Beaded pearl perimeter
+    ctx.repeat_beads(inset=12.0, radius=2.4, spacing=8.0, color=gold_trim)
+    ctx.stroke_rounded_rect(17.0, 17.0, w - 34.0, h - 34.0, 3.5, "#2a2c38", 0.8)
+
+    # 3. Quad-symmetrical ornate tapestry
+    ctx.begin_symmetry(mirror_x=True, mirror_y=True)
+
+    # Corner lush baroque acanthus
+    ctx.draw_baroque_corner(22.0, 22.0, 56.0, gold_trim, gold_deep)
+
+    # Lateral acanthus leaf plume
+    ctx.draw_acanthus(from=[22.0, 92.0], to=[22.0, 168.0], lobes=4, curl_dir="right", color=slate_card, stroke=gold_trim, stroke_width=1.0)
+
+    # Diagonal volute arching toward medallion
+    ctx.draw_volute(cx=cx - 36.0, cy=cy - 36.0, radius=28.0, turns=1.1, angle_start=0.6, color=gold_trim, width=2.6, profile="fluted_ridge")
+
+    ctx.end_symmetry()
+
+    # 4. Central Baroque Medallion & Royal Cartouche
+    rx = w * 0.32
+    ry = h * 0.27
+    ctx.draw_baroque_cartouche(cx, cy, rx, ry, gold_trim, gold_deep, 3.0)
+    ctx.draw_baroque_crest(cx, cy - ry * 1.02, 1.05, gold_trim, gold_deep, False)
+    ctx.draw_baroque_crest(cx, cy + ry * 1.02, 1.05, gold_trim, gold_deep, True)
+
+    ctx.fill_oval(cx, cy, rx=w * 0.22, ry=h * 0.17, color="#0c0d12")
+
+    # Center crest: Monumental Royal Spade with gold filigree
+    ctx.draw_baroque_spade(cx, cy, size=w * 0.26, body_color="#12131a", filigree_color=gold_trim, accent_color=gold_deep)
+
+    # 5. Apply sculpted micro-relief finish (< 1ms)
+    ctx.apply_finish(style="relief", light_azimuth=135.0, light_elevation=48.0, ao_intensity=1.4, relief_depth=3.2)

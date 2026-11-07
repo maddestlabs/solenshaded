@@ -1,17 +1,28 @@
 #include "solenshaded/table_renderer.hpp"
+#include "solenshaded/dynamic_light.hpp"
 #include "solenshaded/card_texture_cache.hpp"
 #include "solenshaded/classic_deck_symbols.hpp"
 #include "solenshaded/procedural_background.hpp"
+#include "solenshaded/settings_manager.hpp"
+#include "solenshaded/session_manager.hpp"
+#include "solenshaded/ui/svg_icon_renderer.hpp"
+#include "solenshaded/ui/settings_dialog.hpp"
+#include "solenshaded/ui/loading_dialog.hpp"
 #include "eatsbits/ui/glyph/vector_font.hpp"
 #include "eatsbits/eatscript/evaluator.hpp"
 #include "eatsbits/ui/base64.hpp"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
+#include <mutex>
+#include <thread>
 #include <vector>
+#include <random>
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -53,7 +64,14 @@ enum HudButtonId : int {
     BtnAutoFinish = 8,
     BtnMenuToggle = 9,
     BtnMenuAnchor = 10,
-    BtnCardWear   = 11
+    BtnCardWear   = 11,
+    BtnCardStock  = 12,
+    BtnCardCorners= 13,
+    BtnSettings   = 14,
+    BtnDeviation  = 15,
+    BtnVariantPrev= 16,
+    BtnVariantNext= 17,
+    BtnRollSeed   = 18
 };
 
 struct HudButtonRect {
@@ -63,38 +81,8 @@ struct HudButtonRect {
     float w;
     float h;
     const char* label;
+    SvgIconId iconId{SvgIconId::None};
 };
-
-static const char* deckThemeButtonLabel(DeckThemeId theme) noexcept {
-    switch (theme) {
-        case DeckThemeId::ClassicSvg:  return "DECK: CLASSIC [D]";
-        case DeckThemeId::SteampunkAi: return "DECK: STEAMPUNK [D]";
-        case DeckThemeId::Anime:       return "DECK: ANIME [D]";
-        case DeckThemeId::Cyberpunk:   return "DECK: CYBERPUNK [D]";
-        case DeckThemeId::Custom:      return "DECK: BAROQUE [D]";
-        default: return "DECK [D]";
-    }
-}
-
-static const char* cardWearButtonLabel(CardWearLevel wear) noexcept {
-    switch (wear) {
-        case CardWearLevel::Pristine: return "WEAR: PRISTINE [W]";
-        case CardWearLevel::Natural:  return "WEAR: NATURAL [W]";
-        case CardWearLevel::Played:   return "WEAR: PLAYED [W]";
-        case CardWearLevel::Vintage:  return "WEAR: VINTAGE [W]";
-        default: return "WEAR [W]";
-    }
-}
-
-static const char* menuAnchorLabel(MenuAnchor anchor) noexcept {
-    switch (anchor) {
-        case MenuAnchor::BottomLeft:  return "DOCK: BOT-LEFT";
-        case MenuAnchor::BottomRight: return "DOCK: BOT-RIGHT";
-        case MenuAnchor::TopLeft:     return "DOCK: TOP-LEFT";
-        case MenuAnchor::TopRight:    return "DOCK: TOP-RIGHT";
-        default: return "DOCK: BOT-LEFT";
-    }
-}
 
 std::vector<HudButtonRect> buildHudButtons(
     float width,
@@ -119,14 +107,84 @@ std::vector<HudButtonRect> buildHudButtons(
         orbY = margin;
     }
 
+    // Ergonometric clearance: if bottom stock rail is active, avoid card collision
+    if ((board.variant() == GameVariant::KlondikeDraw1 || board.variant() == GameVariant::KlondikeDraw3) && !board.piles().empty()) {
+        if (board.piles()[0].y > height * 0.5f) {
+            const bool stockOnRight = (board.piles()[0].x > width * 0.5f);
+            if (anchor == MenuAnchor::BottomRight && stockOnRight) {
+                orbY = std::max(8.0f, board.piles()[0].y - orbSize - 8.0f);
+            } else if (anchor == MenuAnchor::BottomLeft && !stockOnRight) {
+                orbY = std::max(8.0f, board.piles()[0].y - orbSize - 8.0f);
+            }
+        }
+    }
+
     HudButtonRect bMenuToggle{BtnMenuToggle, orbX, orbY, orbSize, orbSize, "MENU"};
     if (!menuOpen) {
         return { bMenuToggle };
     }
 
-    // Consolidated 2-column popover drawer
-    const float popW = 328.0f;
-    const float popH = 224.0f;
+    const auto menuMode = SettingsManager::instance().settings().menuDisplayMode;
+    bool isIconOnly = false;
+    if (menuMode == MenuDisplayMode::IconOnly) {
+        isIconOnly = true;
+    } else if (menuMode == MenuDisplayMode::Auto) {
+        const float aspect = width / std::max(1.0f, height);
+        isIconOnly = (aspect < 1.05f) || (width < 600.0f);
+    }
+
+    auto makeBtn = [](HudButtonId id, float x, float y, float w, float h, const char* label, SvgIconId iconId) -> HudButtonRect {
+        return HudButtonRect{id, x, y, w, h, label, iconId};
+    };
+
+    if (isIconOnly) {
+        const float btnSize = 38.0f;
+        const float colGap = 6.0f;
+        const float rowGap = 6.0f;
+        const float popW = 2.0f * btnSize + colGap + 16.0f; // 98.0f
+        const float popH = 5.0f * btnSize + 4.0f * rowGap + 16.0f; // 230.0f
+
+        float popX = orbX;
+        float popY = (orbY + orbSize + 8.0f + popH <= height)
+            ? (orbY + orbSize + 8.0f)
+            : (orbY - 8.0f - popH);
+
+        if (anchor == MenuAnchor::BottomRight || anchor == MenuAnchor::TopRight) {
+            popX = orbX + orbSize - popW;
+        }
+        popX = std::clamp(popX, 8.0f, std::max(8.0f, width - popW - 8.0f));
+        popY = std::clamp(popY, 8.0f, std::max(8.0f, height - popH - 8.0f));
+
+        const float startY = popY + 8.0f;
+        const float col0X = popX + 8.0f;
+        const float col1X = col0X + btnSize + colGap;
+
+        // Row 0: Undo / Redo
+        HudButtonRect bUndo     = makeBtn(BtnUndo,        col0X, startY + 0.0f * (btnSize + rowGap), btnSize, btnSize, "<", SvgIconId::None);
+        HudButtonRect bRedo     = makeBtn(BtnRedo,        col1X, startY + 0.0f * (btnSize + rowGap), btnSize, btnSize, ">", SvgIconId::None);
+        // Row 1: Restart / New Deal
+        HudButtonRect bRestart  = makeBtn(BtnRestart,     col0X, startY + 1.0f * (btnSize + rowGap), btnSize, btnSize, "R", SvgIconId::None);
+        HudButtonRect bNewDeal  = makeBtn(BtnNewDeal,     col1X, startY + 1.0f * (btnSize + rowGap), btnSize, btnSize, "+", SvgIconId::None);
+        // Row 2: Hint / Auto-play
+        HudButtonRect bHint     = makeBtn(BtnHint,        col0X, startY + 2.0f * (btnSize + rowGap), btnSize, btnSize, "?", SvgIconId::None);
+        HudButtonRect bFinish   = makeBtn(BtnAutoFinish,  col1X, startY + 2.0f * (btnSize + rowGap), btnSize, btnSize, "=>", SvgIconId::None);
+        // Row 3: Game Variant Prev / Next
+        HudButtonRect bVarPrev  = makeBtn(BtnVariantPrev, col0X, startY + 3.0f * (btnSize + rowGap), btnSize, btnSize, "<", SvgIconId::None);
+        HudButtonRect bVarNext  = makeBtn(BtnVariantNext, col1X, startY + 3.0f * (btnSize + rowGap), btnSize, btnSize, ">", SvgIconId::None);
+        // Row 4: Roll Seed / Settings
+        HudButtonRect bSeed     = makeBtn(BtnRollSeed,    col0X, startY + 4.0f * (btnSize + rowGap), btnSize, btnSize, "*", SvgIconId::None);
+        HudButtonRect bSettings = makeBtn(BtnSettings,    col1X, startY + 4.0f * (btnSize + rowGap), btnSize, btnSize, "O", SvgIconId::None);
+
+        return { bMenuToggle, bUndo, bRedo, bRestart, bNewDeal, bHint, bFinish, bVarPrev, bVarNext, bSeed, bSettings };
+    }
+
+    // Full Mode (Icon + Text)
+    const float popW = std::min(330.0f, std::max(270.0f, width - 16.0f));
+    const float colW = (popW - 24.0f) * 0.5f;
+    const float rowH = 28.0f;
+    const float rowGap = 5.0f;
+    const float popH = 6.0f * rowH + 5.0f * rowGap + 24.0f; // ~217px
+
     float popX = orbX;
     float popY = (orbY + orbSize + 8.0f + popH <= height)
         ? (orbY + orbSize + 8.0f)
@@ -138,37 +196,38 @@ std::vector<HudButtonRect> buildHudButtons(
     popX = std::clamp(popX, 8.0f, std::max(8.0f, width - popW - 8.0f));
     popY = std::clamp(popY, 8.0f, std::max(8.0f, height - popH - 8.0f));
 
-    const float colW = (popW - 24.0f) * 0.5f;
-    const float rowH = 28.0f;
-    const float rowGap = 5.0f;
     const float startY = popY + 12.0f;
     const float col0X = popX + 8.0f;
     const float col1X = col0X + colW + 8.0f;
 
-    const char* deckLabel = deckThemeButtonLabel(CardTextureCache::instance().currentDeckTheme());
-    const char* wearLabel = cardWearButtonLabel(CardTextureCache::instance().cardWearLevel());
-    const char* anchorLabel = menuAnchorLabel(anchor);
+    // Row 0: Undo / Redo
+    HudButtonRect bUndo    = makeBtn(BtnUndo,       col0X, startY + 0.0f * (rowH + rowGap), colW, rowH, "< Undo", SvgIconId::None);
+    HudButtonRect bRedo    = makeBtn(BtnRedo,       col1X, startY + 0.0f * (rowH + rowGap), colW, rowH, "> Redo", SvgIconId::None);
+    // Row 1: Restart / New Game
+    HudButtonRect bRestart = makeBtn(BtnRestart,    col0X, startY + 1.0f * (rowH + rowGap), colW, rowH, "R Restart", SvgIconId::None);
+    HudButtonRect bNewDeal = makeBtn(BtnNewDeal,    col1X, startY + 1.0f * (rowH + rowGap), colW, rowH, "+ New Game", SvgIconId::None);
+    // Row 2: Hint / Auto-step
+    HudButtonRect bHint    = makeBtn(BtnHint,       col0X, startY + 2.0f * (rowH + rowGap), colW, rowH, "? Hint", SvgIconId::None);
+    HudButtonRect bFinish  = makeBtn(BtnAutoFinish, col1X, startY + 2.0f * (rowH + rowGap), colW, rowH, board.canAutoFinish() ? "Auto-finish =>" : "Auto-step =>", SvgIconId::None);
 
-    auto makeBtn = [](HudButtonId id, float x, float y, float w, float h, const char* label) -> HudButtonRect {
-        return HudButtonRect{id, x, y, w, h, label};
-    };
+    // Row 3: Game Variant Stepper [ < ] [ VARIANT NAME ] [ > ]
+    const float chevW = 28.0f;
+    const float fullRowW = popW - 16.0f;
+    const float varLabelW = fullRowW - 2.0f * (chevW + 4.0f);
+    HudButtonRect bVarPrev = makeBtn(BtnVariantPrev, col0X, startY + 3.0f * (rowH + rowGap), chevW, rowH, "<", SvgIconId::None);
+    HudButtonRect bVariant = makeBtn(BtnVariant,     col0X + chevW + 4.0f, startY + 3.0f * (rowH + rowGap), varLabelW, rowH, SolitaireBoard::variantName(board.variant()), SvgIconId::None);
+    HudButtonRect bVarNext = makeBtn(BtnVariantNext, col0X + chevW + 4.0f + varLabelW + 4.0f, startY + 3.0f * (rowH + rowGap), chevW, rowH, ">", SvgIconId::None);
 
-    // Column 0: Game & Aesthetics
-    HudButtonRect bNewDeal = makeBtn(BtnNewDeal, col0X, startY + 0.0f * (rowH + rowGap), colW, rowH, "NEW DEAL [N]");
-    HudButtonRect bRestart = makeBtn(BtnRestart, col0X, startY + 1.0f * (rowH + rowGap), colW, rowH, "RESTART [R]");
-    HudButtonRect bVariant = makeBtn(BtnVariant, col0X, startY + 2.0f * (rowH + rowGap), colW, rowH, SolitaireBoard::variantName(board.variant()));
-    HudButtonRect bTheme   = makeBtn(BtnTheme,   col0X, startY + 3.0f * (rowH + rowGap), colW, rowH, SolitaireBoard::themeName(board.tableTheme()));
-    HudButtonRect bDeck    = makeBtn(BtnDeck,    col0X, startY + 4.0f * (rowH + rowGap), colW, rowH, deckLabel);
+    // Row 4: Seed Quick Controller [SEED #2026] [ROLL RANDOM]
+    static char sSeedLabel[32];
+    std::snprintf(sSeedLabel, sizeof(sSeedLabel), "# SEED %u", board.seed());
+    HudButtonRect bSeedInfo = makeBtn(BtnSettings, col0X, startY + 4.0f * (rowH + rowGap), colW, rowH, sSeedLabel, SvgIconId::None);
+    HudButtonRect bRollSeed = makeBtn(BtnRollSeed, col1X, startY + 4.0f * (rowH + rowGap), colW, rowH, "* Roll Seed", SvgIconId::None);
 
-    // Column 1: Moves, Assists & Dock Position
-    HudButtonRect bUndo   = makeBtn(BtnUndo,       col1X, startY + 0.0f * (rowH + rowGap), colW, rowH, "UNDO [Z]");
-    HudButtonRect bRedo   = makeBtn(BtnRedo,       col1X, startY + 1.0f * (rowH + rowGap), colW, rowH, "REDO [Y]");
-    HudButtonRect bHint   = makeBtn(BtnHint,       col1X, startY + 2.0f * (rowH + rowGap), colW, rowH, "NETHER SIGHT [H]");
-    HudButtonRect bFinish = makeBtn(BtnAutoFinish, col1X, startY + 3.0f * (rowH + rowGap), colW, rowH, board.canAutoFinish() ? "AUTO-FINISH [A] *" : "AUTO-STEP [A]");
-    HudButtonRect bWear   = makeBtn(BtnCardWear,   col1X, startY + 4.0f * (rowH + rowGap), colW, rowH, wearLabel);
-    HudButtonRect bAnchor = makeBtn(BtnMenuAnchor, popX + 8.0f, startY + 5.0f * (rowH + rowGap), popW - 16.0f, rowH, anchorLabel);
+    // Row 5: Settings Full-Width
+    HudButtonRect bSettings = makeBtn(BtnSettings, col0X, startY + 5.0f * (rowH + rowGap), fullRowW, rowH, "O Settings", SvgIconId::None);
 
-    return { bMenuToggle, bNewDeal, bRestart, bVariant, bTheme, bDeck, bUndo, bRedo, bHint, bFinish, bWear, bAnchor };
+    return { bMenuToggle, bUndo, bRedo, bRestart, bNewDeal, bHint, bFinish, bVarPrev, bVariant, bVarNext, bSeedInfo, bRollSeed, bSettings };
 }
 
 int hitTestHudButtons(
@@ -213,19 +272,21 @@ bool isPointInsideMenuPopover(
     return (mx >= minX && mx <= maxX && my >= minY && my <= maxY);
 }
 
-struct ThemePalette {
-    float woodR0, woodG0, woodB0;
-    float woodR1, woodG1, woodB1;
-    float trimR, trimG, trimB;
-    float feltR0, feltG0, feltB0;
-    float feltR1, feltG1, feltB1;
-    float cardBackR0, cardBackG0, cardBackB0;
-    float cardBackR1, cardBackG1, cardBackB1;
-    float accentR, accentG, accentB;
-};
+} // namespace
 
 ThemePalette getPalette(TableThemeId theme) noexcept {
     switch (theme) {
+        case TableThemeId::PastelTan:
+            return {
+                0.38f, 0.32f, 0.26f,
+                0.26f, 0.22f, 0.18f,
+                0.58f, 0.50f, 0.42f,
+                0.83f, 0.77f, 0.69f,
+                0.78f, 0.72f, 0.64f,
+                0.20f, 0.20f, 0.22f,
+                0.10f, 0.10f, 0.12f,
+                0.85f, 0.40f, 0.25f
+            };
         case TableThemeId::SunkenSanctum:
             return {
                 0.11f, 0.12f, 0.16f,
@@ -350,6 +411,8 @@ ThemePalette getPalette(TableThemeId theme) noexcept {
             };
     }
 }
+
+namespace {
 const char* rankString(Rank r) noexcept {
     switch (r) {
         case Rank::Ace:   return "A";
@@ -516,13 +579,22 @@ struct Card3DTransform {
 };
 
 inline std::array<Point2D, 16> getCardPerimeterUV(float ru = 0.065f, float rv = 0.046f, float marginU = 0.0f, float marginV = 0.0f) {
-    constexpr float kC30 = 0.8660254f;
-    constexpr float kS30 = 0.5000000f;
-
     const float l = marginU;
     const float r = 1.0f - marginU;
     const float t = marginV;
     const float b = 1.0f - marginV;
+
+    if (ru <= 0.001f || rv <= 0.001f) {
+        return {{
+            Point2D{r, t}, Point2D{r, t}, Point2D{r, t}, Point2D{r, t},
+            Point2D{r, b}, Point2D{r, b}, Point2D{r, b}, Point2D{r, b},
+            Point2D{l, b}, Point2D{l, b}, Point2D{l, b}, Point2D{l, b},
+            Point2D{l, t}, Point2D{l, t}, Point2D{l, t}, Point2D{l, t}
+        }};
+    }
+
+    constexpr float kC30 = 0.8660254f;
+    constexpr float kS30 = 0.5000000f;
 
     return {{
         Point2D{r - ru, t},
@@ -602,8 +674,10 @@ void render3DCard(
     const ThemePalette& pal,
     const eatsbits::ui::LightSource2D& light
 ) {
-    // 16-point perimeter polygons with smooth circular rounded corners
-    const auto outerUV = getCardPerimeterUV(0.065f, 0.046f, 0.0f, 0.0f);
+    // 16-point perimeter polygons with deck or user-configured corner radius
+    const float effRu = CardTextureCache::instance().effectiveRu();
+    const float effRv = CardTextureCache::instance().effectiveRv();
+    const auto outerUV = getCardPerimeterUV(effRu, effRv, 0.0f, 0.0f);
 
     // 1. Dynamic Detached 3D Shadow with Rounded Edges
     {
@@ -704,6 +778,11 @@ void render3DCard(
         pts[i] = xf.projectUV(outerUV[i].x, outerUV[i].y, zSign);
     }
 
+    float scratchDistort = 0.0f;
+    const auto wearLvl = CardTextureCache::instance().cardWearLevel();
+    if (wearLvl == CardWearLevel::Played) scratchDistort = 0.0018f;
+    else if (wearLvl == CardWearLevel::Vintage) scratchDistort = 0.0035f;
+
     if (r.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU && CardTextureCache::instance().hasGpuAtlas()) {
         const auto& slot = front
             ? CardTextureCache::instance().getAtlasSlot(c.suit, c.rank)
@@ -714,7 +793,7 @@ void render3DCard(
             atlasUVs[i].x = slot.u0 + outerUV[i].x * (slot.u1 - slot.u0);
             atlasUVs[i].y = slot.v0 + outerUV[i].y * (slot.v1 - slot.v0);
         }
-        r.drawTexturedPolygon(pts.data(), atlasUVs.data(), 16, cardLight, cardLight, cardLight, 1.0f);
+        r.drawTexturedPolygon(pts.data(), atlasUVs.data(), 16, cardLight, cardLight, cardLight, 1.0f, scratchDistort);
     } else if (tex && (!tex->argb32.empty() || !tex->rgba.empty())) {
         int mipW = tex->width;
         int mipH = tex->height;
@@ -735,7 +814,7 @@ void render3DCard(
 
     if (c.enshadedGlow) {
         draw3DRoundedOutline(r, xf, outerUV, zSign, pal.accentR, pal.accentG, pal.accentB, 0.98f, 2.6f);
-    } else {
+    } else if (wearLvl == CardWearLevel::Pristine) {
         draw3DRoundedOutline(r, xf, outerUV, zSign, 0.22f, 0.18f, 0.14f, 0.85f, 1.2f);
     }
 }
@@ -784,7 +863,8 @@ void drawProceduralCard(
     const float x = baseX + (baseW - w) * 0.5f;
     const float y = baseY + (baseH - h) * 0.5f - c.elevation * 0.65f;
 
-    const float radius = std::max(4.0f, w * 0.08f);
+    const float effRu = CardTextureCache::instance().effectiveRu();
+    const float radius = (effRu <= 0.001f) ? 0.0f : std::max(1.0f, effRu * w);
 
     // Hardwood 3.0 Scoped 2D Rotation for resting micro-tilts & flight banking
     struct ScopedCardRotation {
@@ -811,18 +891,22 @@ void drawProceduralCard(
     r.drawRectDropShadow(x, y, w, h, radius, shadowElevation, light, shadowOpacity);
 
     const bool showBack = (!c.faceUp) || (c.flipAngle > kHalfPi);
+    float scratchDistort = 0.0f;
+    const auto wearLvl = CardTextureCache::instance().cardWearLevel();
+    if (wearLvl == CardWearLevel::Played) scratchDistort = 0.0018f;
+    else if (wearLvl == CardWearLevel::Vintage) scratchDistort = 0.0035f;
 
     // Fast GPU Texture Atlas path
     if (r.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU && CardTextureCache::instance().hasGpuAtlas()) {
         const auto& slot = showBack
             ? CardTextureCache::instance().getBackAtlasSlot()
             : CardTextureCache::instance().getAtlasSlot(c.suit, c.rank);
-        r.drawTexturedRoundedRectGpu(x, y, w, h, radius, slot.u0, slot.v0, slot.u1, slot.v1, 1.0f, 1.0f, 1.0f, 1.0f);
+        r.drawTexturedRoundedRectGpu(x, y, w, h, radius, slot.u0, slot.v0, slot.u1, slot.v1, 1.0f, 1.0f, 1.0f, 1.0f, scratchDistort);
 
         if (c.enshadedGlow) {
             r.drawRoundedRectOutline(x - 1.5f, y - 1.5f, w + 3.0f, h + 3.0f, radius + 1.5f,
                                      pal.accentR, pal.accentG, pal.accentB, 0.98f, 2.6f, 4);
-        } else {
+        } else if (wearLvl == CardWearLevel::Pristine) {
             r.drawRoundedRectOutline(x, y, w, h, radius, 0.22f, 0.18f, 0.14f, 0.85f, 1.2f, 4);
         }
         return;
@@ -843,7 +927,7 @@ void drawProceduralCard(
         if (c.enshadedGlow) {
             r.drawRoundedRectOutline(x - 1.5f, y - 1.5f, w + 3.0f, h + 3.0f, radius + 1.5f,
                                      pal.accentR, pal.accentG, pal.accentB, 0.98f, 2.6f, 4);
-        } else {
+        } else if (wearLvl == CardWearLevel::Pristine) {
             r.drawRoundedRectOutline(x, y, w, h, radius, 0.22f, 0.18f, 0.14f, 0.85f, 1.2f, 4);
         }
         return;
@@ -968,13 +1052,34 @@ void drawCarvedButton(
     r.drawRoundedRectOutline(b.x, b.y, b.w, b.h, 5.0f, borderR, borderG, borderB,
                              (hovered || highlighted) ? 0.95f : 0.62f, (hovered || highlighted) ? 1.6f : 1.1f, 4);
 
-    eatsbits::ui::glyph::drawVectorText(
-        r, b.label, b.x + 8.0f, b.y + (b.h - 11.0f) * 0.5f, 11.0f,
-        highlighted ? pal.accentR : 0.94f,
-        highlighted ? pal.accentG : 0.90f,
-        highlighted ? pal.accentB : 0.82f,
-        1.0f
-    );
+    float textOffsetX = 10.0f;
+    const bool hasLabel = (b.label != nullptr && b.label[0] != '\0');
+    if (b.iconId != SvgIconId::None) {
+        constexpr float iconSize = 16.0f;
+        float iconX = hasLabel ? (b.x + 6.0f) : (b.x + (b.w - iconSize) * 0.5f);
+        float iconY = b.y + (b.h - iconSize) * 0.5f;
+        float iconR = (hovered || highlighted) ? pal.accentR : pal.trimR;
+        float iconG = (hovered || highlighted) ? pal.accentG : pal.trimG;
+        float iconB = (hovered || highlighted) ? pal.accentB : pal.trimB;
+        SvgIconRenderer::instance().renderIcon(r, b.iconId, iconX, iconY, iconSize, iconSize, iconR, iconG, iconB, 1.0f);
+        textOffsetX = 26.0f;
+    }
+
+    if (hasLabel) {
+        float textW = eatsbits::ui::glyph::getVectorTextWidth(10.5f, b.label);
+        float textX = (b.w <= 38.0f || b.id == BtnVariant)
+            ? (b.x + (b.w - textW) * 0.5f)
+            : (b.x + textOffsetX);
+        float textY = b.y + (b.h - 11.0f) * 0.5f;
+
+        eatsbits::ui::glyph::drawVectorText(
+            r, b.label, textX, textY, 10.5f,
+            highlighted ? pal.accentR : 0.94f,
+            highlighted ? pal.accentG : 0.90f,
+            highlighted ? pal.accentB : 0.82f,
+            1.0f
+        );
+    }
 }
 
 void drawMenuOrbButton(
@@ -1035,24 +1140,32 @@ void drawStaticTableChrome(
     r.drawRoundedRectOutline(0.0f, 0.0f, width, height, 0.0f, pal.trimR, pal.trimG, pal.trimB, 0.35f, 1.5f, 0);
 
     // 2. Recessed Empty Pile Wells & Foundation Runes
-    const float cw = board.cardWidth();
-    const float ch = board.cardHeight();
-    const float wellRadius = std::max(5.0f, cw * 0.08f);
+    const bool showMarkings = SettingsManager::instance().settings().showTableMarkings;
+    if (showMarkings) {
+        const float cw = board.cardWidth();
+        const float ch = board.cardHeight();
+        const float wellRadius = std::max(5.0f, cw * 0.08f);
 
-    const auto& piles = board.piles();
-    for (size_t pIdx = 0; pIdx < piles.size(); ++pIdx) {
-        const Pile& p = piles[pIdx];
-        r.drawRoundedRect(p.x, p.y, cw, ch, wellRadius, 0.0f, 0.0f, 0.0f, 0.25f, 4);
-        r.drawRoundedRectOutline(p.x, p.y, cw, ch, wellRadius, pal.trimR, pal.trimG, pal.trimB, 0.40f, 1.2f, 4);
+        // Blend directly into the background texture as if dyed/painted on the table
+        r.setBlendMode(eatsbits::ui::BlendMode::Multiply);
 
-        if (p.type == PileType::Foundation) {
-            Suit foundationSuit = static_cast<Suit>(p.index % 4);
-            drawSuitPip(r, foundationSuit, p.x + cw * 0.5f, p.y + ch * 0.5f, cw * 0.18f, cw * 0.18f,
-                        pal.trimR, pal.trimG, pal.trimB, 0.28f);
-        } else if (p.type == PileType::Stock) {
-            r.drawCircleOutline(p.x + cw * 0.5f, p.y + ch * 0.5f, cw * 0.20f,
-                                pal.trimR, pal.trimG, pal.trimB, 0.40f, 2.0f, 16);
+        const auto& piles = board.piles();
+        for (size_t pIdx = 0; pIdx < piles.size(); ++pIdx) {
+            const Pile& p = piles[pIdx];
+            r.drawRoundedRect(p.x, p.y, cw, ch, wellRadius, 0.0f, 0.0f, 0.0f, 0.25f, 4);
+            r.drawRoundedRectOutline(p.x, p.y, cw, ch, wellRadius, pal.trimR, pal.trimG, pal.trimB, 0.40f, 1.2f, 4);
+
+            if (p.type == PileType::Foundation) {
+                Suit foundationSuit = static_cast<Suit>(p.index % 4);
+                drawSuitPip(r, foundationSuit, p.x + cw * 0.5f, p.y + ch * 0.5f, cw * 0.18f, cw * 0.18f,
+                            pal.trimR, pal.trimG, pal.trimB, 0.32f);
+            } else if (p.type == PileType::Stock) {
+                r.drawCircleOutline(p.x + cw * 0.5f, p.y + ch * 0.5f, cw * 0.20f,
+                                    pal.trimR, pal.trimG, pal.trimB, 0.40f, 2.0f, 16);
+            }
         }
+
+        r.setBlendMode(eatsbits::ui::BlendMode::Normal);
     }
 }
 
@@ -1074,26 +1187,36 @@ void TableRenderer::renderBoard(
     float gestureStartX,
     float gestureStartY,
     float gestureCurX,
-    float gestureCurY
+    float gestureCurY,
+    const eatsbits::ui::LightSource2D* dynamicLight
 ) {
     const ThemePalette pal = getPalette(board.tableTheme());
-    // Overhead table illumination: centered horizontally, situated over upper tableau, elevated 550px
-    const eatsbits::ui::LightSource2D light{width * 0.5f, height * 0.28f, 550.0f, 1.0f};
+    // Overhead table illumination: dynamic swaying light or centered static default
+    const eatsbits::ui::LightSource2D light = dynamicLight ? *dynamicLight : eatsbits::ui::LightSource2D{width * 0.5f, height * 0.28f, 550.0f, 1.0f};
+
+    if (r.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU && CardTextureCache::instance().isAtlasDirty()) {
+        CardTextureCache::instance().buildGpuAtlas(r);
+    }
 
     // 1. Static Table Chrome (Recorded once into FBO cache and blitted via fast memcpy!)
     static TableThemeId s_cachedTheme = static_cast<TableThemeId>(-1);
     static GameVariant s_cachedVariant = GameVariant::KlondikeDraw1;
     static float s_cachedW = 0.0f;
     static float s_cachedH = 0.0f;
+    static bool s_cachedMarkings = true;
+
+    const bool showMarkings = SettingsManager::instance().settings().showTableMarkings;
 
     if (s_cachedTheme != board.tableTheme() ||
         s_cachedVariant != board.variant() ||
+        s_cachedMarkings != showMarkings ||
         std::abs(s_cachedW - width) > 0.5f ||
         std::abs(s_cachedH - height) > 0.5f) {
         r.invalidateChromeCache();
         ProceduralBackgroundSystem::instance().invalidateCache();
         s_cachedTheme = board.tableTheme();
         s_cachedVariant = board.variant();
+        s_cachedMarkings = showMarkings;
         s_cachedW = width;
         s_cachedH = height;
     }
@@ -1108,20 +1231,22 @@ void TableRenderer::renderBoard(
     }
 
     // 2. Bottom-Center Live Telemetry Watermark (Seed, Score, Moves, Timer)
-    int mins = static_cast<int>(board.elapsedSeconds()) / 60;
-    int secs = static_cast<int>(board.elapsedSeconds()) % 60;
-    char botTelemetry[128];
-    if (width >= 720.0f) {
-        std::snprintf(botTelemetry, sizeof(botTelemetry), "SEED #%u    SCORE: %d    MOVES: %u    %02d:%02d",
-                      board.seed(), board.score(), board.moveCount(), mins, secs);
-    } else {
-        std::snprintf(botTelemetry, sizeof(botTelemetry), "SCORE: %d    MOVES: %u    %02d:%02d",
-                      board.score(), board.moveCount(), mins, secs);
+    if (showMarkings) {
+        int mins = static_cast<int>(board.elapsedSeconds()) / 60;
+        int secs = static_cast<int>(board.elapsedSeconds()) % 60;
+        char botTelemetry[128];
+        if (width >= 720.0f) {
+            std::snprintf(botTelemetry, sizeof(botTelemetry), "SEED #%u    SCORE: %d    MOVES: %u    %02d:%02d",
+                          board.seed(), board.score(), board.moveCount(), mins, secs);
+        } else {
+            std::snprintf(botTelemetry, sizeof(botTelemetry), "SCORE: %d    MOVES: %u    %02d:%02d",
+                          board.score(), board.moveCount(), mins, secs);
+        }
+        const float teleLen = static_cast<float>(std::strlen(botTelemetry)) * 6.2f;
+        const float teleX = std::max(12.0f, (width - teleLen) * 0.5f);
+        eatsbits::ui::glyph::drawVectorText(r, botTelemetry, teleX, height - 16.0f, 11.5f,
+                                            pal.trimR, pal.trimG, pal.trimB, 0.52f);
     }
-    const float teleLen = static_cast<float>(std::strlen(botTelemetry)) * 6.2f;
-    const float teleX = std::max(12.0f, (width - teleLen) * 0.5f);
-    eatsbits::ui::glyph::drawVectorText(r, botTelemetry, teleX, height - 16.0f, 11.5f,
-                                        pal.trimR, pal.trimG, pal.trimB, 0.52f);
 
     // 3. Resting Cards (culls buried invisible cards in Stock/Waste/Foundation!)
     const float cw = board.cardWidth();
@@ -1527,6 +1652,8 @@ struct InteractiveContext {
     bool prevKeyT = false;
     bool prevKeyD = false;
     bool prevKeyW = false;
+    bool prevKeyS = false;
+    bool prevKeyC = false;
     bool prevKeyM = false;
     bool prevKeyEsc = false;
     bool prevKeyF11 = false;
@@ -1535,6 +1662,11 @@ struct InteractiveContext {
     bool prevKey2 = false;
     bool prevKey3 = false;
     bool prevKey4 = false;
+    bool prevKeyO = false;
+    bool prevKeyBack = false;
+    bool prevKeyTab = false;
+    bool prevKeyJ = false;
+    bool prevKeyL = false;
 
     bool isFullscreen = false;
     bool hasSavedWindowState = false;
@@ -1558,9 +1690,300 @@ struct InteractiveContext {
     bool autoCascadeActive = false;
     float autoCascadeTimer = 0.0f;
     double lastTime = 0.0;
+    SettingsDialog settingsDialog;
+    LoadingDialog loadingDialog;
+    DynamicLightController lightController;
+
+    enum class AsyncOp {
+        None,
+        Conditioning,
+        DeckLoad,
+        TableTheme
+    };
+
+    struct AsyncManager {
+        std::atomic<bool> isBusy{false};
+        std::atomic<bool> cancelRequested{false};
+        std::atomic<float> progress{0.0f};
+        std::mutex mutex;
+        std::string statusText{"Initializing..."};
+        AsyncOp opType{AsyncOp::None};
+        CardTextureCache::StagingDeck stagingDeck;
+        bool stagingDeckReady{false};
+        TableThemeId targetTheme{TableThemeId::EmeraldLawn};
+        bool themeReady{false};
+        std::string dialogTitle{"PREPARING PROCEDURAL ASSETS"};
+        std::string dialogInitialStatus{"Initializing..."};
+        bool dialogCancellable{true};
+        double startTime{0.0};
+        double debounceSeconds{0.12}; // 120ms debounce threshold to prevent micro-flashes on fast cache hits
+#if !defined(__EMSCRIPTEN__)
+        std::thread workerThread;
+#endif
+
+        ~AsyncManager() {
+            if (isBusy.load()) {
+                cancelRequested.store(true);
+            }
+#if !defined(__EMSCRIPTEN__)
+            if (workerThread.joinable()) {
+                workerThread.join();
+            }
+#endif
+        }
+    } asyncManager;
+
+    void startAsyncTableTheme(TableThemeId theme) {
+        if (!ProceduralBackgroundSystem::instance().isPbrTexturesEnabled()) {
+            board.setTableTheme(theme);
+            lightController.applyThemeDefault(theme);
+            SettingsManager::instance().settings().tableTheme = theme;
+            SettingsManager::instance().save();
+            foley.triggerSound(FoleySound::WoodClick, 0.85f);
+            return;
+        }
+
+        if (asyncManager.isBusy.load()) {
+            asyncManager.cancelRequested.store(true);
+#if !defined(__EMSCRIPTEN__)
+            if (asyncManager.workerThread.joinable()) {
+                asyncManager.workerThread.join();
+            }
+#endif
+        }
+
+        asyncManager.cancelRequested.store(false);
+        asyncManager.progress.store(0.0f);
+        asyncManager.themeReady = false;
+        asyncManager.opType = AsyncOp::TableTheme;
+        asyncManager.targetTheme = theme;
+        asyncManager.dialogTitle = "SYNTHESIZING TABLE SURFACE";
+        asyncManager.dialogInitialStatus = "Baking normal-mapped surface & chandelier lighting...";
+        asyncManager.dialogCancellable = true;
+        asyncManager.startTime = glfwGetTime();
+        asyncManager.debounceSeconds = 0.12;
+        asyncManager.isBusy.store(true);
+        {
+            std::lock_guard<std::mutex> lock(asyncManager.mutex);
+            asyncManager.statusText = "Synthesizing procedural table surface...";
+        }
+
+        float curW = static_cast<float>(width);
+        float curH = static_cast<float>(height);
+#if defined(__EMSCRIPTEN__)
+        bool ok = ProceduralBackgroundSystem::instance().prebakeTheme(
+            theme, curW, curH,
+            eatsbits::ui::LightSource2D{curW * 0.5f, -200.0f, 1.0f},
+            [this](float p, const std::string& msg) -> bool {
+                asyncManager.progress.store(p);
+                {
+                    std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                    asyncManager.statusText = msg;
+                }
+                return !asyncManager.cancelRequested.load();
+            }
+        );
+        if (ok && !asyncManager.cancelRequested.load()) {
+            asyncManager.themeReady = true;
+        }
+        asyncManager.isBusy.store(false);
+#else
+        asyncManager.workerThread = std::thread([this, theme, curW, curH]() {
+            bool ok = ProceduralBackgroundSystem::instance().prebakeTheme(
+                theme, curW, curH,
+                eatsbits::ui::LightSource2D{curW * 0.5f, -200.0f, 1.0f},
+                [this](float p, const std::string& msg) -> bool {
+                    asyncManager.progress.store(p);
+                    {
+                        std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                        asyncManager.statusText = msg;
+                    }
+                    return !asyncManager.cancelRequested.load();
+                }
+            );
+            if (ok && !asyncManager.cancelRequested.load()) {
+                asyncManager.themeReady = true;
+            }
+            asyncManager.isBusy.store(false);
+        });
+#endif
+    }
+
+    void startAsyncConditioning(CardWearLevel wear, CardStock stock) {
+        if (asyncManager.isBusy.load()) {
+            asyncManager.cancelRequested.store(true);
+#if !defined(__EMSCRIPTEN__)
+            if (asyncManager.workerThread.joinable()) {
+                asyncManager.workerThread.join();
+            }
+#endif
+        }
+
+        asyncManager.cancelRequested.store(false);
+        asyncManager.progress.store(0.0f);
+        asyncManager.stagingDeckReady = false;
+        asyncManager.opType = AsyncOp::Conditioning;
+        asyncManager.dialogTitle = "CONDITIONING PLAYING CARDS";
+        asyncManager.dialogInitialStatus = "Synthesizing physical paper stock & wear...";
+        asyncManager.dialogCancellable = true;
+        asyncManager.startTime = glfwGetTime();
+        asyncManager.debounceSeconds = 0.12;
+        asyncManager.isBusy.store(true);
+        {
+            std::lock_guard<std::mutex> lock(asyncManager.mutex);
+            asyncManager.statusText = "Initializing card paper simulation...";
+        }
+
+#if defined(__EMSCRIPTEN__)
+        bool ok = CardTextureCache::instance().bakeStagedConditioning(
+            asyncManager.stagingDeck, wear, stock,
+            [this](float p, const std::string& msg) -> bool {
+                asyncManager.progress.store(p);
+                {
+                    std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                    asyncManager.statusText = msg;
+                }
+                return !asyncManager.cancelRequested.load();
+            }
+        );
+        if (ok && !asyncManager.cancelRequested.load()) {
+            asyncManager.stagingDeckReady = true;
+        }
+        asyncManager.isBusy.store(false);
+#else
+        asyncManager.workerThread = std::thread([this, wear, stock]() {
+            bool ok = CardTextureCache::instance().bakeStagedConditioning(
+                asyncManager.stagingDeck, wear, stock,
+                [this](float p, const std::string& msg) -> bool {
+                    asyncManager.progress.store(p);
+                    {
+                        std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                        asyncManager.statusText = msg;
+                    }
+                    return !asyncManager.cancelRequested.load();
+                }
+            );
+            if (ok && !asyncManager.cancelRequested.load()) {
+                asyncManager.stagingDeckReady = true;
+            }
+            asyncManager.isBusy.store(false);
+        });
+#endif
+    }
+
+    void startAsyncDeckTheme(DeckThemeId theme, CardWearLevel wear, CardStock stock) {
+        if (asyncManager.isBusy.load()) {
+            asyncManager.cancelRequested.store(true);
+#if !defined(__EMSCRIPTEN__)
+            if (asyncManager.workerThread.joinable()) {
+                asyncManager.workerThread.join();
+            }
+#endif
+        }
+
+        asyncManager.cancelRequested.store(false);
+        asyncManager.progress.store(0.0f);
+        asyncManager.stagingDeckReady = false;
+        asyncManager.opType = AsyncOp::DeckLoad;
+        asyncManager.dialogTitle = "LOADING DECK THEME";
+        asyncManager.dialogInitialStatus = "Loading artwork and synthesizing textures...";
+        asyncManager.dialogCancellable = true;
+        asyncManager.startTime = glfwGetTime();
+        asyncManager.debounceSeconds = 0.12;
+        asyncManager.isBusy.store(true);
+        {
+            std::lock_guard<std::mutex> lock(asyncManager.mutex);
+            asyncManager.statusText = "Loading card artwork master...";
+        }
+
+#if defined(__EMSCRIPTEN__)
+        bool ok = CardTextureCache::instance().loadStagedDeckTheme(
+            asyncManager.stagingDeck, theme, wear, stock,
+            CardTextureCache::kDefaultCardW, CardTextureCache::kDefaultCardH,
+            [this](float p, const std::string& msg) -> bool {
+                asyncManager.progress.store(p);
+                {
+                    std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                    asyncManager.statusText = msg;
+                }
+                return !asyncManager.cancelRequested.load();
+            }
+        );
+        if (ok && !asyncManager.cancelRequested.load()) {
+            asyncManager.stagingDeckReady = true;
+        }
+        asyncManager.isBusy.store(false);
+#else
+        asyncManager.workerThread = std::thread([this, theme, wear, stock]() {
+            bool ok = CardTextureCache::instance().loadStagedDeckTheme(
+                asyncManager.stagingDeck, theme, wear, stock,
+                CardTextureCache::kDefaultCardW, CardTextureCache::kDefaultCardH,
+                [this](float p, const std::string& msg) -> bool {
+                    asyncManager.progress.store(p);
+                    {
+                        std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                        asyncManager.statusText = msg;
+                    }
+                    return !asyncManager.cancelRequested.load();
+                }
+            );
+            if (ok && !asyncManager.cancelRequested.load()) {
+                asyncManager.stagingDeckReady = true;
+            }
+            asyncManager.isBusy.store(false);
+        });
+#endif
+    }
 
     InteractiveContext(SolitaireBoard& b, AudioFoleyEngine& f, uint32_t w, uint32_t h)
-        : board(b), foley(f), width(w), height(h) {}
+        : board(b), foley(f), width(w), height(h) {
+        SettingsManager::instance().load();
+        // Defer texture loading and conditioning to async startup flow to keep cold boot instantaneous
+        SettingsManager::instance().applyToGame(board, foley, false);
+        lightController.setPreset(SettingsManager::instance().settings().lightingPreset);
+        menuAnchor = SettingsManager::instance().settings().menuAnchor;
+
+        if (SessionManager::instance().hasSavedSession()) {
+            SessionManager::instance().loadSession(board);
+        }
+
+        settingsDialog.onSettingsChanged = [this]() {
+            menuAnchor = SettingsManager::instance().settings().menuAnchor;
+            renderer.setAntiAliasingMode(SettingsManager::instance().settings().aaMode);
+            lightController.setPreset(SettingsManager::instance().settings().lightingPreset);
+
+            const auto& s = SettingsManager::instance().settings();
+            auto& cache = CardTextureCache::instance();
+            bool themeChanged = (s.tableTheme != board.tableTheme());
+            bool deckChanged = (s.deckTheme != cache.currentDeckTheme());
+            bool wearChanged = (s.cardWear != cache.cardWearLevel());
+            bool stockChanged = (s.cardStock != cache.cardStock());
+
+            if (themeChanged) {
+                startAsyncTableTheme(s.tableTheme);
+            }
+            if (deckChanged) {
+                startAsyncDeckTheme(s.deckTheme, s.cardWear, s.cardStock);
+            } else if (wearChanged || stockChanged) {
+                startAsyncConditioning(s.cardWear, s.cardStock);
+            }
+        };
+    }
+
+    void checkStartupSettingsLoad() {
+        const auto& s = SettingsManager::instance().settings();
+        auto& cache = CardTextureCache::instance();
+
+        bool deckChanged = (s.deckTheme != cache.currentDeckTheme());
+        bool wearChanged = (s.cardWear != cache.cardWearLevel());
+        bool stockChanged = (s.cardStock != cache.cardStock());
+
+        if (deckChanged) {
+            startAsyncDeckTheme(s.deckTheme, s.cardWear, s.cardStock);
+        } else if (wearChanged || stockChanged) {
+            startAsyncConditioning(s.cardWear, s.cardStock);
+        }
+    }
 
     void toggleFullscreen() noexcept {
         setFullscreen(!isFullscreen);
@@ -1676,31 +2099,93 @@ struct InteractiveContext {
         switch (btnId) {
             case BtnNewDeal:
                 autoCascadeActive = false;
-                board.newDeal(board.seed() + 1u, board.variant());
+                {
+                    uint32_t nextSeed = board.seed() + 1u;
+                    if (SettingsManager::instance().settings().randomizeOnNewDeal) {
+                        std::random_device rd;
+                        auto nowVal = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+                        nextSeed = (static_cast<uint32_t>(rd()) ^ static_cast<uint32_t>(nowVal)) & 0x7FFFFFFFu;
+                        if (nextSeed == 0) nextSeed = 2026u;
+                    }
+                    board.newDeal(nextSeed, board.variant());
+                    SettingsManager::instance().settings().lastSeed = nextSeed;
+                    SettingsManager::instance().save();
+                    SessionManager::instance().clearSession();
+                }
                 foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
                 break;
             case BtnRestart:
                 autoCascadeActive = false;
                 board.restartDeal();
+                SessionManager::instance().clearSession();
                 foley.triggerSound(FoleySound::DeckShuffle, 0.8f);
                 break;
+            case BtnVariantPrev: {
+                autoCascadeActive = false;
+                uint8_t curVar = static_cast<uint8_t>(board.variant());
+                uint8_t prevVar = (curVar == 0) ? 3u : (curVar - 1u);
+                board.newDeal(board.seed(), static_cast<GameVariant>(prevVar));
+                board.computeLayout(static_cast<float>(width), static_cast<float>(height));
+                SessionManager::instance().clearSession();
+                foley.triggerSound(FoleySound::DeckShuffle, 0.85f);
+                break;
+            }
+            case BtnVariantNext:
             case BtnVariant: {
                 autoCascadeActive = false;
                 uint8_t nextVar = (static_cast<uint8_t>(board.variant()) + 1u) % 4u;
                 board.newDeal(board.seed(), static_cast<GameVariant>(nextVar));
+                board.computeLayout(static_cast<float>(width), static_cast<float>(height));
+                SessionManager::instance().clearSession();
                 foley.triggerSound(FoleySound::DeckShuffle, 0.85f);
+                break;
+            }
+            case BtnRollSeed: {
+                autoCascadeActive = false;
+                std::random_device rd;
+                auto nowVal = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+                uint32_t nextSeed = (static_cast<uint32_t>(rd()) ^ static_cast<uint32_t>(nowVal)) & 0x7FFFFFFFu;
+                if (nextSeed == 0) nextSeed = 2026u;
+                board.newDeal(nextSeed, board.variant());
+                board.computeLayout(static_cast<float>(width), static_cast<float>(height));
+                SettingsManager::instance().settings().lastSeed = nextSeed;
+                SettingsManager::instance().save();
+                SessionManager::instance().clearSession();
+                foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
                 break;
             }
             case BtnTheme: {
                 uint8_t nextTheme = (static_cast<uint8_t>(board.tableTheme()) + 1u) % static_cast<uint8_t>(TableThemeId::Count);
-                board.setTableTheme(static_cast<TableThemeId>(nextTheme));
+                startAsyncTableTheme(static_cast<TableThemeId>(nextTheme));
                 foley.triggerSound(FoleySound::WoodClick, 0.8f);
                 break;
             }
             case BtnDeck: {
                 uint8_t nextDeck = (static_cast<uint8_t>(CardTextureCache::instance().currentDeckTheme()) + 1u) %
                                    static_cast<uint8_t>(DeckThemeId::Count);
+                if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::Custom) {
+                    std::error_code ec;
+                    if (!std::filesystem::exists("decks/custom.eats", ec) &&
+                        !std::filesystem::exists("decks/custom.png", ec)) {
+                        nextDeck = static_cast<uint8_t>(DeckThemeId::SolEnshade);
+                    }
+                }
 #if defined(__EMSCRIPTEN__)
+                // Skip offline-only heavy baroque decks on web if not present in MEMFS
+                if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueNoir ||
+                    static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueLight ||
+                    static_cast<DeckThemeId>(nextDeck) == DeckThemeId::BaroqueDark) {
+                    std::error_code ec;
+                    bool hasBaroque = std::filesystem::exists("decks/baroque_noir.eats", ec) ||
+                                      std::filesystem::exists("/decks/baroque_noir.eats", ec) ||
+                                      std::filesystem::exists("decks/baroque_light.eats", ec) ||
+                                      std::filesystem::exists("/decks/baroque_light.eats", ec) ||
+                                      std::filesystem::exists("decks/baroque_dark.eats", ec) ||
+                                      std::filesystem::exists("/decks/baroque_dark.eats", ec);
+                    if (!hasBaroque) {
+                        nextDeck = static_cast<uint8_t>(DeckThemeId::SolEnshade);
+                    }
+                }
                 if (static_cast<DeckThemeId>(nextDeck) == DeckThemeId::SteampunkAi) {
                     std::error_code ec;
                     bool exists = std::filesystem::exists("decks/steampunk.eats", ec) ||
@@ -1742,11 +2227,10 @@ struct InteractiveContext {
                     }
                 }
 #endif
-                CardTextureCache::instance().loadDeckTheme(static_cast<DeckThemeId>(nextDeck));
-                if (renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
-                    CardTextureCache::instance().buildGpuAtlas(renderer);
-                }
-                foley.triggerSound(FoleySound::DeckShuffle, 0.85f);
+                startAsyncDeckTheme(static_cast<DeckThemeId>(nextDeck),
+                                    CardTextureCache::instance().cardWearLevel(),
+                                    CardTextureCache::instance().cardStock());
+                foley.triggerSound(FoleySound::WoodClick, 0.7f);
                 break;
             }
             case BtnUndo:
@@ -1788,13 +2272,41 @@ struct InteractiveContext {
             }
             case BtnCardWear: {
                 int nextWear = (static_cast<int>(CardTextureCache::instance().cardWearLevel()) + 1) % static_cast<int>(CardWearLevel::Count);
-                CardTextureCache::instance().setCardWearLevel(static_cast<CardWearLevel>(nextWear));
-                if (renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
-                    CardTextureCache::instance().buildGpuAtlas(renderer);
-                }
+                startAsyncConditioning(static_cast<CardWearLevel>(nextWear), CardTextureCache::instance().cardStock());
+                foley.triggerSound(FoleySound::WoodClick, 0.7f);
+                break;
+            }
+            case BtnCardStock: {
+                int nextStock = (static_cast<int>(CardTextureCache::instance().cardStock()) + 1) % static_cast<int>(CardStock::Count);
+                startAsyncConditioning(CardTextureCache::instance().cardWearLevel(), static_cast<CardStock>(nextStock));
+                foley.triggerSound(FoleySound::WoodClick, 0.7f);
+                break;
+            }
+            case BtnCardCorners: {
+                int nextStyle = (static_cast<int>(CardTextureCache::instance().cornerStyle()) + 1) % static_cast<int>(CardCornerStyle::Count);
+                CardTextureCache::instance().setCornerStyle(static_cast<CardCornerStyle>(nextStyle));
                 foley.triggerSound(FoleySound::CardSlide, 0.75f);
                 break;
             }
+            case BtnDeviation: {
+                float curDev = board.cardDeviation();
+                float nextDev = 0.0f;
+                if (curDev < 0.10f) nextDev = 0.25f;
+                else if (curDev < 0.35f) nextDev = 0.50f;
+                else if (curDev < 0.65f) nextDev = 0.75f;
+                else if (curDev < 0.90f) nextDev = 1.0f;
+                else nextDev = 0.0f;
+
+                board.setCardDeviation(nextDev);
+                SettingsManager::instance().settings().cardDeviation = nextDev;
+                SettingsManager::instance().save();
+                foley.triggerSound(FoleySound::CardSlide, 0.75f);
+                break;
+            }
+            case BtnSettings:
+                settingsDialog.open();
+                foley.triggerSound(FoleySound::WoodClick, 0.8f);
+                break;
             default:
                 break;
         }
@@ -1805,6 +2317,82 @@ struct InteractiveContext {
         double now = glfwGetTime();
         float dt = static_cast<float>(now - lastTime);
         lastTime = now;
+
+        if (asyncManager.isBusy.load() || loadingDialog.isOpen()) {
+            double elapsed = now - asyncManager.startTime;
+            if (asyncManager.isBusy.load() && elapsed >= asyncManager.debounceSeconds && !loadingDialog.isOpen()) {
+                loadingDialog.open(
+                    asyncManager.dialogTitle,
+                    asyncManager.dialogInitialStatus,
+                    asyncManager.dialogCancellable
+                );
+            }
+
+            if (loadingDialog.isOpen()) {
+                loadingDialog.setProgress(asyncManager.progress.load());
+                {
+                    std::lock_guard<std::mutex> lock(asyncManager.mutex);
+                    loadingDialog.setStatus(asyncManager.statusText);
+                }
+
+                if (loadingDialog.isCancelRequested() && !asyncManager.cancelRequested.load()) {
+                    asyncManager.cancelRequested.store(true);
+                    loadingDialog.setStatus("Cancelling operation...");
+                }
+            }
+
+            if (!asyncManager.isBusy.load()) {
+#if !defined(__EMSCRIPTEN__)
+                if (asyncManager.workerThread.joinable()) {
+                    asyncManager.workerThread.join();
+                }
+#endif
+
+                if (asyncManager.cancelRequested.load()) {
+                    if (loadingDialog.isOpen()) {
+                        loadingDialog.close();
+                    }
+                    foley.triggerSound(FoleySound::WoodClick, 0.6f);
+                    // Cancelled! Revert settings to active baseline so user isn't stuck on next boot
+                    SettingsManager::instance().settings().deckTheme = CardTextureCache::instance().currentDeckTheme();
+                    SettingsManager::instance().settings().cardWear = CardTextureCache::instance().cardWearLevel();
+                    SettingsManager::instance().settings().cardStock = CardTextureCache::instance().cardStock();
+                    SettingsManager::instance().save();
+                } else if (asyncManager.opType == AsyncOp::TableTheme && asyncManager.themeReady) {
+                    board.setTableTheme(asyncManager.targetTheme);
+                    lightController.applyThemeDefault(asyncManager.targetTheme);
+                    SettingsManager::instance().settings().tableTheme = asyncManager.targetTheme;
+                    SettingsManager::instance().save();
+                    foley.triggerSound(FoleySound::WoodClick, 0.85f);
+                    if (loadingDialog.isOpen()) {
+                        loadingDialog.close();
+                    }
+                } else if (asyncManager.stagingDeckReady) {
+                    CardTextureCache::instance().commitStagedDeck(std::move(asyncManager.stagingDeck));
+                    if (renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
+                        CardTextureCache::instance().buildGpuAtlas(renderer);
+                    }
+                    SettingsManager::instance().settings().deckTheme = CardTextureCache::instance().currentDeckTheme();
+                    SettingsManager::instance().settings().cardWear = CardTextureCache::instance().cardWearLevel();
+                    SettingsManager::instance().settings().cardStock = CardTextureCache::instance().cardStock();
+                    SettingsManager::instance().save();
+
+                    foley.triggerSound(FoleySound::DeckShuffle, 0.85f);
+                    if (loadingDialog.isOpen()) {
+                        loadingDialog.close();
+                    }
+                } else {
+                    if (loadingDialog.isOpen()) {
+                        loadingDialog.close();
+                    }
+                    // Load failed; keep active baseline in settings
+                    SettingsManager::instance().settings().deckTheme = CardTextureCache::instance().currentDeckTheme();
+                    SettingsManager::instance().settings().cardWear = CardTextureCache::instance().cardWearLevel();
+                    SettingsManager::instance().settings().cardStock = CardTextureCache::instance().cardStock();
+                    SettingsManager::instance().save();
+                }
+            }
+        }
 
 #if defined(__EMSCRIPTEN__)
         double cssW = EM_ASM_DOUBLE({
@@ -1881,7 +2469,21 @@ struct InteractiveContext {
         const bool leftDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
         const bool rightDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
 
-        if (leftDown && !prevLeftDown) {
+        if (loadingDialog.isOpen() || asyncManager.isBusy.load()) {
+            if (loadingDialog.isOpen()) {
+                if (leftDown && !prevLeftDown) {
+                    loadingDialog.handleMouseButton(0, 1, fmx, fmy);
+                }
+            }
+        } else if (settingsDialog.isOpen()) {
+            if (leftDown && !prevLeftDown) {
+                settingsDialog.handleMouseButton(0, 1, fmx, fmy, board, foley);
+            } else if (leftDown) {
+                settingsDialog.handleMouseMove(fmx, fmy, board, foley);
+            } else if (!leftDown && prevLeftDown) {
+                settingsDialog.handleMouseButton(0, 0, fmx, fmy, board, foley);
+            }
+        } else if (leftDown && !prevLeftDown) {
             if (hoveredBtn != BtnNone) {
                 triggerAction(hoveredBtn);
             } else if (menuOpen && isPointInsideMenuPopover(fmx, fmy, static_cast<float>(width), static_cast<float>(height), board, menuOpen, menuAnchor)) {
@@ -1987,7 +2589,7 @@ struct InteractiveContext {
             }
         }
 
-        if (rightDown && !prevRightDown) {
+        if (!loadingDialog.isOpen() && !asyncManager.isBusy.load() && rightDown && !prevRightDown) {
             int hitPile = -1;
             int hitCard = -1;
             if (board.hitTestCard(fmx, fmy, hitPile, hitCard) && hitPile >= 0 && hitCard >= 0) {
@@ -2007,36 +2609,58 @@ struct InteractiveContext {
             return trig;
         };
 
-        if (edgeKey(GLFW_KEY_N, prevKeyN)) triggerAction(BtnNewDeal);
-        if (edgeKey(GLFW_KEY_R, prevKeyR)) triggerAction(BtnRestart);
-        if (edgeKey(GLFW_KEY_Z, prevKeyZ)) triggerAction(BtnUndo);
-        if (edgeKey(GLFW_KEY_Y, prevKeyY)) triggerAction(BtnRedo);
-        if (edgeKey(GLFW_KEY_H, prevKeyH)) triggerAction(BtnHint);
-        if (edgeKey(GLFW_KEY_A, prevKeyA)) triggerAction(BtnAutoFinish);
-        if (edgeKey(GLFW_KEY_T, prevKeyT)) triggerAction(BtnTheme);
-        if (edgeKey(GLFW_KEY_D, prevKeyD)) triggerAction(BtnDeck);
-        if (edgeKey(GLFW_KEY_W, prevKeyW)) triggerAction(BtnCardWear);
-        if (edgeKey(GLFW_KEY_M, prevKeyM)) triggerAction(BtnMenuToggle);
-        if (edgeKey(GLFW_KEY_ESCAPE, prevKeyEsc)) { if (menuOpen) menuOpen = false; }
+        if (loadingDialog.isOpen() || asyncManager.isBusy.load()) {
+            if (loadingDialog.isOpen()) {
+                if (edgeKey(GLFW_KEY_ESCAPE, prevKeyEsc)) loadingDialog.handleKey(GLFW_KEY_ESCAPE, 1, 0);
+            }
+        } else if (settingsDialog.isOpen()) {
+            if (edgeKey(GLFW_KEY_ESCAPE, prevKeyEsc)) settingsDialog.handleKey(GLFW_KEY_ESCAPE, 1, 0, board, foley);
+            if (edgeKey(GLFW_KEY_ENTER, prevKeyEnter)) settingsDialog.handleKey(GLFW_KEY_ENTER, 1, 0, board, foley);
+            if (edgeKey(GLFW_KEY_BACKSPACE, prevKeyBack)) settingsDialog.handleKey(GLFW_KEY_BACKSPACE, 1, 0, board, foley);
+            if (edgeKey(GLFW_KEY_TAB, prevKeyTab)) settingsDialog.handleKey(GLFW_KEY_TAB, 1, 0, board, foley);
+        } else {
+            if (edgeKey(GLFW_KEY_N, prevKeyN)) triggerAction(BtnNewDeal);
+            if (edgeKey(GLFW_KEY_R, prevKeyR)) triggerAction(BtnRestart);
+            if (edgeKey(GLFW_KEY_Z, prevKeyZ)) triggerAction(BtnUndo);
+            if (edgeKey(GLFW_KEY_Y, prevKeyY)) triggerAction(BtnRedo);
+            if (edgeKey(GLFW_KEY_H, prevKeyH)) triggerAction(BtnHint);
+            if (edgeKey(GLFW_KEY_A, prevKeyA)) triggerAction(BtnAutoFinish);
+            if (edgeKey(GLFW_KEY_T, prevKeyT)) triggerAction(BtnTheme);
+            if (edgeKey(GLFW_KEY_D, prevKeyD)) triggerAction(BtnDeck);
+            if (edgeKey(GLFW_KEY_W, prevKeyW)) triggerAction(BtnCardWear);
+            if (edgeKey(GLFW_KEY_S, prevKeyS)) triggerAction(BtnCardStock);
+            if (edgeKey(GLFW_KEY_C, prevKeyC)) triggerAction(BtnCardCorners);
+            if (edgeKey(GLFW_KEY_M, prevKeyM)) triggerAction(BtnMenuToggle);
+            if (edgeKey(GLFW_KEY_J, prevKeyJ)) triggerAction(BtnDeviation);
+            if (edgeKey(GLFW_KEY_O, prevKeyO)) triggerAction(BtnSettings);
+            if (edgeKey(GLFW_KEY_L, prevKeyL)) {
+                lightController.cyclePreset();
+                SettingsManager::instance().settings().lightingPreset = lightController.getPreset();
+                SettingsManager::instance().save();
+                foley.triggerSound(FoleySound::WoodClick, 0.65f);
+                std::cout << "[SolEnshaded] Dynamic lighting switched to: " << lightController.getPresetName() << std::endl;
+            }
+            if (edgeKey(GLFW_KEY_ESCAPE, prevKeyEsc)) { if (menuOpen) menuOpen = false; }
 
-        // F11 or Alt+Enter: Fullscreen Toggle (matching Eatsbits standard)
-        const bool isAlt = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) ||
-                           (glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
-        const bool keyEnter = (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) ||
-                              (glfwGetKey(window, GLFW_KEY_KP_ENTER) == GLFW_PRESS);
-        const bool keyF11 = glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS;
+            // F11 or Alt+Enter: Fullscreen Toggle (matching Eatsbits standard)
+            const bool isAlt = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) ||
+                               (glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
+            const bool keyEnter = (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) ||
+                                  (glfwGetKey(window, GLFW_KEY_KP_ENTER) == GLFW_PRESS);
+            const bool keyF11 = glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS;
 
-        const bool isFullscreenTrigger = (keyF11 && !prevKeyF11) || (isAlt && keyEnter && !prevKeyEnter);
-        prevKeyF11 = keyF11;
-        prevKeyEnter = keyEnter;
+            const bool isFullscreenTrigger = (keyF11 && !prevKeyF11) || (isAlt && keyEnter && !prevKeyEnter);
+            prevKeyF11 = keyF11;
+            prevKeyEnter = keyEnter;
 
-        if (isFullscreenTrigger) {
-            toggleFullscreen();
+            if (isFullscreenTrigger) {
+                toggleFullscreen();
+            }
+            if (edgeKey(GLFW_KEY_1, prevKey1)) { board.newDeal(board.seed(), GameVariant::KlondikeDraw1); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
+            if (edgeKey(GLFW_KEY_2, prevKey2)) { board.newDeal(board.seed(), GameVariant::KlondikeDraw3); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
+            if (edgeKey(GLFW_KEY_3, prevKey3)) { board.newDeal(board.seed(), GameVariant::FreeCell);      foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
+            if (edgeKey(GLFW_KEY_4, prevKey4)) { board.newDeal(board.seed(), GameVariant::SpectresPatience); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
         }
-        if (edgeKey(GLFW_KEY_1, prevKey1)) { board.newDeal(board.seed(), GameVariant::KlondikeDraw1); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
-        if (edgeKey(GLFW_KEY_2, prevKey2)) { board.newDeal(board.seed(), GameVariant::KlondikeDraw3); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
-        if (edgeKey(GLFW_KEY_3, prevKey3)) { board.newDeal(board.seed(), GameVariant::FreeCell);      foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
-        if (edgeKey(GLFW_KEY_4, prevKey4)) { board.newDeal(board.seed(), GameVariant::SpectresPatience); foley.triggerSound(FoleySound::DeckShuffle, 0.85f); }
 
         if (autoCascadeActive) {
             autoCascadeTimer += dt;
@@ -2051,12 +2675,27 @@ struct InteractiveContext {
         }
 
         board.updateAnimations(dt);
+        lightController.update(dt);
+        const eatsbits::ui::LightSource2D dynamicLight = lightController.getEffectiveLight(static_cast<float>(width), static_cast<float>(height));
+        const auto lCol = lightController.getLightColor();
+        const auto aCol = lightController.getAmbientColor();
 
         if (width > 0 && height > 0) {
             renderer.beginFrame(static_cast<float>(width), static_cast<float>(height));
+            renderer.setGlobalLight(dynamicLight, lCol[0], lCol[1], lCol[2], aCol[0], aCol[1], aCol[2]);
+            renderer.setShaderTime(static_cast<float>(now));
             TableRenderer::renderBoard(renderer, board, static_cast<float>(width), static_cast<float>(height),
                                        draggedPile, draggedCardIdx, dragOffsetX, dragOffsetY, hoveredBtn,
-                                       menuOpen, menuAnchor, isGesturing, gestureStartX, gestureStartY, gestureCurX, gestureCurY);
+                                       menuOpen, menuAnchor, isGesturing, gestureStartX, gestureStartY, gestureCurX, gestureCurY,
+                                       &dynamicLight);
+            if (settingsDialog.isOpen()) {
+                ThemePalette pal = getPalette(board.tableTheme());
+                settingsDialog.render(renderer, static_cast<float>(width), static_cast<float>(height), fmx, fmy, pal);
+            }
+            if (loadingDialog.isOpen()) {
+                ThemePalette pal = getPalette(board.tableTheme());
+                loadingDialog.render(renderer, static_cast<float>(width), static_cast<float>(height), fmx, fmy, pal, now);
+            }
             renderer.endFrame();
         }
     }
@@ -2133,6 +2772,12 @@ int TableRenderer::runInteractiveWindow(
     InteractiveContext& ctx = *s_activeContext;
     ctx.window = window;
 
+    glfwSetCharCallback(window, [](GLFWwindow* /*win*/, unsigned int codepoint) {
+        if (s_activeContext && s_activeContext->settingsDialog.isOpen()) {
+            s_activeContext->settingsDialog.handleChar(codepoint);
+        }
+    });
+
     glfwSetDropCallback(window, [](GLFWwindow* /*win*/, int count, const char* paths[]) {
         for (int i = 0; i < count; ++i) {
             if (paths && paths[i]) {
@@ -2174,8 +2819,13 @@ int TableRenderer::runInteractiveWindow(
     }
 
     board.computeLayout(static_cast<float>(width), static_cast<float>(height));
-    foley.triggerSound(FoleySound::DeckShuffle, 0.85f);
     ctx.lastTime = glfwGetTime();
+
+    // Check user settings and asynchronously load/condition deck if different from baseline
+    ctx.checkStartupSettingsLoad();
+    if (!ctx.asyncManager.isBusy.load()) {
+        foley.triggerSound(FoleySound::DeckShuffle, 0.85f);
+    }
 
 #if defined(__EMSCRIPTEN__)
     std::cout << "[SolEnshaded Web] Registering Emscripten requestAnimationFrame main loop..." << std::endl;
@@ -2191,6 +2841,14 @@ int TableRenderer::runInteractiveWindow(
         ctx.updateAndRender();
     }
 
+    if (!ctx.board.isVictory()) {
+        SessionManager::instance().saveSession(ctx.board);
+    } else {
+        SessionManager::instance().clearSession();
+    }
+    SettingsManager::instance().syncFromGame(ctx.board, ctx.foley);
+    SettingsManager::instance().save();
+
     ctx.renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -2200,6 +2858,10 @@ int TableRenderer::runInteractiveWindow(
 }
 
 bool loadEatsPackage(InteractiveContext& ctx, const std::string& filePath, int cardW, int cardH) {
+    if (cardW < CardTextureCache::kDefaultCardW || cardH < CardTextureCache::kDefaultCardH) {
+        cardW = CardTextureCache::kDefaultCardW;
+        cardH = CardTextureCache::kDefaultCardH;
+    }
     std::ifstream file(filePath, std::ios::binary);
     if (!file.is_open()) return false;
 
@@ -2232,6 +2894,25 @@ bool loadEatsPackage(InteractiveContext& ctx, const std::string& filePath, int c
         } else if (kwargs.find("name") != kwargs.end()) {
             themeName = kwargs.at("name").asString();
         }
+        if (kwargs.find("corner_radius") != kwargs.end()) {
+            CardTextureCache::instance().setDeckCornerRadius(kwargs.at("corner_radius").asFloat(24.0f));
+        } else if (args.size() > 1 && args[1].isDict() && args[1].hasKey("corner_radius")) {
+            CardTextureCache::instance().setDeckCornerRadius(args[1].get("corner_radius").asFloat(24.0f));
+        } else if (!args.empty() && args[0].isDict() && args[0].hasKey("corner_radius")) {
+            CardTextureCache::instance().setDeckCornerRadius(args[0].get("corner_radius").asFloat(24.0f));
+        }
+        return eatsbits::eatscript::Value(true);
+    };
+
+    auto setCornerRadiusFn = [&](const std::vector<eatsbits::eatscript::Value>& args,
+                                 const std::map<std::string, eatsbits::eatscript::Value>& kwargs) -> eatsbits::eatscript::Value {
+        float r = 24.0f;
+        if (!args.empty() && args[0].isNumber()) {
+            r = args[0].asFloat(24.0f);
+        } else if (kwargs.find("radius") != kwargs.end()) {
+            r = kwargs.at("radius").asFloat(24.0f);
+        }
+        CardTextureCache::instance().setDeckCornerRadius(r);
         return eatsbits::eatscript::Value(true);
     };
 
@@ -2319,6 +3000,7 @@ bool loadEatsPackage(InteractiveContext& ctx, const std::string& filePath, int c
                 deckBytes = std::move(parsed->data);
                 if (parsed->mimeType.find("svg") != std::string::npos) format = "svg";
                 else if (parsed->mimeType.find("png") != std::string::npos) format = "png";
+                else if (parsed->mimeType.find("jpeg") != std::string::npos || parsed->mimeType.find("jpg") != std::string::npos) format = "jpg";
             }
         }
         if (deckBytes.empty() && !rawStr.empty()) {
@@ -2351,10 +3033,38 @@ bool loadEatsPackage(InteractiveContext& ctx, const std::string& filePath, int c
         int targetW = getOptInt("card_w", cardW);
         int targetH = getOptInt("card_h", cardH);
 
+        if (kwargs.find("corner_radius") != kwargs.end()) {
+            CardTextureCache::instance().setDeckCornerRadius(kwargs.at("corner_radius").asFloat(24.0f));
+        } else if (optsDict && optsDict->hasKey("corner_radius")) {
+            CardTextureCache::instance().setDeckCornerRadius(optsDict->get("corner_radius").asFloat(24.0f));
+        }
+
+        std::string themeId = getOptString("theme_id", getOptString("theme", ""));
+        DeckThemeId deckTheme = DeckThemeId::Custom;
+        if (themeId == "baroque_noir" || themeId == "baroque_relief" || themeId == "baroque_arches" || themeId == "baroque" ||
+            filePath.find("baroque_noir") != std::string::npos || filePath.find("baroque") != std::string::npos) {
+            deckTheme = DeckThemeId::BaroqueNoir;
+        } else if (themeId == "baroque_light" || themeId == "baroque_alabaster" ||
+                   filePath.find("baroque_light") != std::string::npos || filePath.find("baroque_alabaster") != std::string::npos) {
+            deckTheme = DeckThemeId::BaroqueLight;
+        } else if (themeId == "baroque_dark" || filePath.find("baroque_dark") != std::string::npos) {
+            deckTheme = DeckThemeId::BaroqueDark;
+        } else if (themeId == "solenshade") {
+            deckTheme = DeckThemeId::SolEnshade;
+        } else if (themeId == "classic") {
+            deckTheme = DeckThemeId::ClassicSvg;
+        } else if (themeId == "steampunk") {
+            deckTheme = DeckThemeId::SteampunkAi;
+        } else if (themeId == "anime") {
+            deckTheme = DeckThemeId::Anime;
+        } else if (themeId == "cyberpunk") {
+            deckTheme = DeckThemeId::Cyberpunk;
+        }
+
         if (!deckBytes.empty() &&
             CardTextureCache::instance().loadDeckFromMemory(
                 deckBytes.data(), deckBytes.size(), format, targetW, targetH,
-                DeckThemeId::Custom, filePath)) {
+                deckTheme, filePath)) {
             deckConfigured = true;
             return eatsbits::eatscript::Value(true);
         }
@@ -2366,11 +3076,13 @@ bool loadEatsPackage(InteractiveContext& ctx, const std::string& filePath, int c
     evaluator.registerMemberFunction("sol", "set_theme", setThemeFn);
     evaluator.registerMemberFunction("sol", "set_background", setBgFn);
     evaluator.registerMemberFunction("sol", "set_deck", setDeckFn);
+    evaluator.registerMemberFunction("sol", "set_corner_radius", setCornerRadiusFn);
 
     evaluator.registerFunction("create_theme", setThemeFn);
     evaluator.registerFunction("set_theme", setThemeFn);
     evaluator.registerFunction("set_background", setBgFn);
     evaluator.registerFunction("set_deck", setDeckFn);
+    evaluator.registerFunction("set_corner_radius", setCornerRadiusFn);
 
     evaluator.evaluateSource(scriptPart);
 
@@ -2410,10 +3122,8 @@ bool loadFile(const std::string& filePath) {
     if (filePath.empty() || !s_activeContext) return false;
 
     auto& ctx = *s_activeContext;
-    int cardW = static_cast<int>(ctx.board.cardWidth());
-    int cardH = static_cast<int>(ctx.board.cardHeight());
-    if (cardW <= 0) cardW = 112;
-    if (cardH <= 0) cardH = 156;
+    int cardW = CardTextureCache::kDefaultCardW;
+    int cardH = CardTextureCache::kDefaultCardH;
 
     std::string ext;
     size_t dot = filePath.rfind('.');
@@ -2426,13 +3136,13 @@ bool loadFile(const std::string& filePath) {
         if (loadEatsPackage(ctx, filePath, cardW, cardH)) {
             return true;
         }
-    } else if (ext == ".png") {
+    } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
         if (CardTextureCache::instance().loadBitmapDeck(filePath, cardW, cardH)) {
             if (ctx.renderer.getBackendType() == eatsbits::ui::RenderBackendType::WebGPU) {
                 CardTextureCache::instance().buildGpuAtlas(ctx.renderer);
             }
             ctx.foley.triggerSound(FoleySound::DeckShuffle, 0.9f);
-            std::cout << "[SolEnshaded] Successfully loaded custom PNG deck from: " << filePath << "\n";
+            std::cout << "[SolEnshaded] Successfully loaded custom image deck from: " << filePath << "\n";
             return true;
         }
     } else if (ext == ".svg") {

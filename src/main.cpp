@@ -1,8 +1,10 @@
 #include "solenshaded/solitaire_board.hpp"
 #include "solenshaded/audio_foley.hpp"
 #include "solenshaded/table_renderer.hpp"
+#include "solenshaded/card_texture_cache.hpp"
 #include "solenshaded/procedural_background.hpp"
 #include "solenshaded/proctex_api.hpp"
+#include "solenshaded/settings_manager.hpp"
 #include "eatstextures/png_io.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -10,13 +12,17 @@
 #include <string>
 
 int main(int argc, char** argv) {
-    uint32_t seed = 2026u;
+    solenshaded::SettingsManager::instance().load();
+    const auto& loadedSettings = solenshaded::SettingsManager::instance().settings();
+
+    uint32_t seed = loadedSettings.lastSeed;
     uint32_t width = 1280u;
     uint32_t height = 720u;
     std::string outputPngPath;
-    solenshaded::GameVariant variant = solenshaded::GameVariant::KlondikeDraw1;
-    solenshaded::TableThemeId theme = solenshaded::TableThemeId::EmeraldLawn;
-    constexpr int effectiveAa = 2; // Locked to 4x RGSS high-fidelity supersampling
+    solenshaded::GameVariant variant = loadedSettings.variant;
+    solenshaded::TableThemeId theme = loadedSettings.tableTheme;
+    int effectiveAa = loadedSettings.aaMode;
+    float cardDeviation = loadedSettings.cardDeviation;
     std::string bakeScript;
     std::string exportPbrPrefix;
 
@@ -39,7 +45,9 @@ int main(int argc, char** argv) {
             std::string tName = argv[++i];
             std::string lowerT;
             for (char c : tName) lowerT += static_cast<char>(std::tolower(c));
-            if (lowerT == "emerald" || lowerT == "lawn" || lowerT == "linen" || lowerT == "green") {
+            if (lowerT == "tan" || lowerT == "pasteltan" || lowerT == "pastel" || lowerT == "brown") {
+                theme = solenshaded::TableThemeId::PastelTan;
+            } else if (lowerT == "emerald" || lowerT == "lawn" || lowerT == "linen" || lowerT == "green") {
                 theme = solenshaded::TableThemeId::EmeraldLawn;
             } else if (lowerT == "tweed" || lowerT == "hopsack") {
                 theme = solenshaded::TableThemeId::HopsackTweed;
@@ -73,6 +81,8 @@ int main(int argc, char** argv) {
             bakeScript = argv[++i];
         } else if ((arg == "--export-pbr" || arg == "--pbr-export") && i + 1 < argc) {
             exportPbrPrefix = argv[++i];
+        } else if ((arg == "--deviation" || arg == "--skew" || arg == "--jitter") && i + 1 < argc) {
+            cardDeviation = std::clamp(std::stof(argv[++i]), 0.0f, 1.0f);
         } else if ((arg == "-o" || arg == "--output") && i + 1 < argc) {
             outputPngPath = argv[++i];
         }
@@ -115,6 +125,9 @@ int main(int argc, char** argv) {
 
     solenshaded::SolitaireBoard board;
     board.setTableTheme(theme);
+    board.setCardDeviation(cardDeviation);
+    board.setLayoutMode(loadedSettings.layoutMode);
+    board.setStockPosition(loadedSettings.stockPosition);
     board.newDeal(seed, variant);
     board.computeLayout(static_cast<float>(width), static_cast<float>(height));
 
@@ -126,6 +139,11 @@ int main(int argc, char** argv) {
     if (!outputPngPath.empty()) {
         std::cout << "[SolEnshaded] Rendering procedural table snapshot (" << width << "x" << height
                   << ") -> " << outputPngPath << " ...\n";
+        auto& cache = solenshaded::CardTextureCache::instance();
+        cache.setCornerStyle(loadedSettings.cardCorners);
+        cache.loadDeckTheme(loadedSettings.deckTheme);
+        cache.applyConditioningAndSync(loadedSettings.cardWear, loadedSettings.cardStock);
+
         if (solenshaded::TableRenderer::renderToPng(board, width, height, outputPngPath, effectiveAa)) {
             std::cout << "[SolEnshaded] Successfully wrote " << outputPngPath << "\n";
             return 0;

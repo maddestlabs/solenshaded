@@ -396,6 +396,10 @@ Value Evaluator::evalExpr(Expr* expr) {
                 return Value(left.asNumber() > right.asNumber());
             case TokenType::GreaterEqual:
                 return Value(left.asNumber() >= right.asNumber());
+            case TokenType::And:
+                return Value(left.asBoolean() && right.asBoolean());
+            case TokenType::Or:
+                return Value(left.asBoolean() || right.asBoolean());
             default:
                 break;
         }

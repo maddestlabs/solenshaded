@@ -49,19 +49,39 @@ enum class GameVariant : uint8_t {
     SpectresPatience = 3 // Enshaded Yukon-style variant where buried sub-stacks move freely
 };
 
+enum class ResponsiveLayoutMode : uint8_t {
+    Auto            = 0, // Dynamic aspect-ratio & viewport width adaptation
+    DesktopStandard = 1, // Traditional fixed desktop layout (generous spacing & wide top row)
+    MobileCompact   = 2  // Forced compact mobile layout (lean margins, tight gaps)
+};
+
+enum class StockPosition : uint8_t {
+    Auto        = 0, // Auto: Top-Left in Landscape, Bottom-Right (Thumb Zone) in Portrait
+    TopLeft     = 1, // Classic Top-Left
+    BottomRight = 2, // Thumb Zone: Bottom-Right (One-handed ergonomic reach)
+    BottomLeft  = 3  // Thumb Zone: Bottom-Left (Left-handed ergonomic reach)
+};
+
+enum class MenuDisplayMode : uint8_t {
+    Auto        = 0, // Auto: Icons only on mobile/narrow; Icon+Text on desktop
+    IconAndText = 1, // Always show Icon and Text label
+    IconOnly    = 2  // Minimalist Icon-only toolbar
+};
+
 enum class TableThemeId : uint8_t {
-    EmeraldLawn   = 0, // Green linen canvas weave (ambientCG Fabric035 / classic felt)
-    HopsackTweed  = 1, // Basketweave hopsack tweed with multicolor neps (ambientCG Fabric063)
-    DenimChambray = 2, // Indigo chambray denim with horizontal weft slubs (ambientCG Fabric061)
-    StripedJersey = 3, // Horizontal striped ribbed knit jersey (ambientCG Fabric079)
-    SunkenSanctum = 4, // ZAngband Spectre vault: polished obsidian + cyan aether runes
-    PerilousShores= 5, // Cartographer's cabin + weathered coastal moss (ambientCG Moss002)
-    PebbledCowhide= 6, // Embossed pebble grain cowhide leather
-    LeatherNubuck = 7, // Distressed aniline nubuck cowhide (ambientCG Leather006)
-    PaintedWood   = 8, // Weathered painted barnwood planks (ambientCG PaintedWood008C)
-    PixelDungeon  = 9, // Retro 16x16 dungeon brick wall quantized to Endesga32
-    PixelWater    = 10,// Retro 32x32 aquatic shimmering water tile
-    Count         = 11
+    PastelTan     = 0, // Solid warm pastel tan / craft paper table
+    EmeraldLawn   = 1, // Green linen canvas weave (ambientCG Fabric035 / classic felt)
+    HopsackTweed  = 2, // Basketweave hopsack tweed with multicolor neps (ambientCG Fabric063)
+    DenimChambray = 3, // Indigo chambray denim with horizontal weft slubs (ambientCG Fabric061)
+    StripedJersey = 4, // Horizontal striped ribbed knit jersey (ambientCG Fabric079)
+    SunkenSanctum = 5, // ZAngband Spectre vault: polished obsidian + cyan aether runes
+    PerilousShores= 6, // Cartographer's cabin + weathered coastal moss (ambientCG Moss002)
+    PebbledCowhide= 7, // Embossed pebble grain cowhide leather
+    LeatherNubuck = 8, // Distressed aniline nubuck cowhide (ambientCG Leather006)
+    PaintedWood   = 9, // Weathered painted barnwood planks (ambientCG PaintedWood008C)
+    PixelDungeon  = 10,// Retro 16x16 dungeon brick wall quantized to Endesga32
+    PixelWater    = 11,// Retro 32x32 aquatic shimmering water tile
+    Count         = 12
 };
 
 struct Card {

@@ -30,8 +30,45 @@ const char* SolitaireBoard::variantName(GameVariant v) noexcept {
     }
 }
 
+const char* SolitaireBoard::layoutModeName(ResponsiveLayoutMode m) noexcept {
+    switch (m) {
+        case ResponsiveLayoutMode::Auto:            return "AUTO (ADAPTIVE)";
+        case ResponsiveLayoutMode::DesktopStandard: return "DESKTOP (CLASSIC)";
+        case ResponsiveLayoutMode::MobileCompact:   return "MOBILE (COMPACT)";
+        default: return "AUTO (ADAPTIVE)";
+    }
+}
+
+const char* SolitaireBoard::stockPositionName(StockPosition p) noexcept {
+    switch (p) {
+        case StockPosition::Auto:        return "AUTO (SMART)";
+        case StockPosition::TopLeft:     return "TOP-LEFT (CLASSIC)";
+        case StockPosition::BottomRight: return "BOT-RIGHT (THUMB)";
+        case StockPosition::BottomLeft:  return "BOT-LEFT (LEFTY)";
+        default: return "AUTO (SMART)";
+    }
+}
+
+void SolitaireBoard::setLayoutMode(ResponsiveLayoutMode mode) noexcept {
+    layoutMode_ = mode;
+    computeLayout(viewportW_, viewportH_);
+}
+
+void SolitaireBoard::setStockPosition(StockPosition pos) noexcept {
+    stockPosition_ = pos;
+    computeLayout(viewportW_, viewportH_);
+}
+
+bool SolitaireBoard::isMobileLayout() const noexcept {
+    if (layoutMode_ == ResponsiveLayoutMode::MobileCompact) return true;
+    if (layoutMode_ == ResponsiveLayoutMode::DesktopStandard) return false;
+    const float aspect = viewportW_ / std::max(1.0f, viewportH_);
+    return (aspect < 1.05f) || (viewportW_ < 600.0f);
+}
+
 const char* SolitaireBoard::themeName(TableThemeId t) noexcept {
     switch (t) {
+        case TableThemeId::PastelTan:       return "PASTEL TAN";
         case TableThemeId::EmeraldLawn:     return "GREEN LINEN";
         case TableThemeId::HopsackTweed:    return "HOPSACK TWEED";
         case TableThemeId::DenimChambray:   return "DENIM CHAMBRAY";
@@ -45,6 +82,46 @@ const char* SolitaireBoard::themeName(TableThemeId t) noexcept {
         case TableThemeId::PixelWater:      return "PIXEL WATER";
         default:                            return "GREEN LINEN";
     }
+}
+
+bool SolitaireBoard::restoreSessionState(
+    uint32_t seed,
+    uint32_t rngState,
+    GameVariant variant,
+    int32_t score,
+    uint32_t moveCount,
+    float elapsedSeconds,
+    const std::vector<Pile>& piles,
+    const std::vector<MoveCommand>& undoStack,
+    const std::vector<MoveCommand>& redoStack
+) {
+    if (piles.empty()) return false;
+    constexpr float kLocalPi = 3.14159265358979323846f;
+    seed_ = seed;
+    rngState_ = rngState;
+    variant_ = variant;
+    score_ = score;
+    moveCount_ = moveCount;
+    elapsedSeconds_ = elapsedSeconds;
+    victorySeconds_ = 0.0f;
+    activeHint_ = {};
+    piles_ = piles;
+    undoStack_ = undoStack;
+    redoStack_ = redoStack;
+    computeLayout(viewportW_, viewportH_);
+    updateCardTargets();
+    for (auto& p : piles_) {
+        for (auto& c : p.cards) {
+            c.x = c.targetX;
+            c.y = c.targetY;
+            c.elevation = c.targetElevation;
+            c.angle = c.targetAngle;
+            c.flipAngle = c.faceUp ? 0.0f : kLocalPi;
+            c.vx = 0.0f;
+            c.vy = 0.0f;
+        }
+    }
+    return true;
 }
 
 void SolitaireBoard::restartDeal() {
@@ -173,16 +250,26 @@ void SolitaireBoard::newDeal(uint32_t seed, GameVariant variant) {
 }
 
 void SolitaireBoard::computeLayout(float viewportWidth, float viewportHeight) {
-    viewportW_ = std::max(480.0f, viewportWidth);
-    viewportH_ = std::max(360.0f, viewportHeight);
+    viewportW_ = std::max(240.0f, viewportWidth);
+    viewportH_ = std::max(240.0f, viewportHeight);
 
     const uint32_t numCols = (variant_ == GameVariant::FreeCell) ? 8u : 7u;
+    const bool isMobile = isMobileLayout();
+
+    StockPosition effectiveStock = stockPosition_;
+    if (effectiveStock == StockPosition::Auto) {
+        effectiveStock = isMobile ? StockPosition::BottomRight : StockPosition::TopLeft;
+    }
 
     // Maximized Full-Felt Responsive Framing:
     // With header cleared and single-line telemetry docked at bottom edge,
-    // we use lean modern margins (10-28px horizontal, 8-18px vertical) to maximize card scale.
-    const float marginX = std::clamp(viewportW_ * 0.018f, 10.0f, 28.0f);
-    const float marginY = std::clamp(viewportH_ * 0.014f, 8.0f, 18.0f);
+    // we use lean modern margins (4-12px on mobile, 10-28px on desktop) to maximize card scale.
+    const float marginX = isMobile
+        ? std::clamp(viewportW_ * 0.015f, 4.0f, 12.0f)
+        : std::clamp(viewportW_ * 0.018f, 10.0f, 28.0f);
+    const float marginY = isMobile
+        ? std::clamp(viewportH_ * 0.012f, 6.0f, 12.0f)
+        : std::clamp(viewportH_ * 0.014f, 8.0f, 18.0f);
     constexpr float bottomReserved = 24.0f; // Minimal reservation for bottom telemetry watermark
 
     const float availW = viewportW_ - 2.0f * marginX;
@@ -192,15 +279,13 @@ void SolitaireBoard::computeLayout(float viewportWidth, float viewportHeight) {
     // Canonical proportions in units of Card Width (w):
     // Card aspect ratio: 1.40 (height = 1.40 * width)
     constexpr float kCardAspect = 1.40f;
-    // Column gap ratio: 15% of card width
-    constexpr float kGapXRatio = 0.15f;
-    // Row gap ratio between top piles (Stock/Foundations) and Tableau
-    constexpr float kGapYRatio = 0.16f;
+    // On mobile portrait, squeeze column gap ratio down to 4%..8% so cards stay as large as possible
+    const float kGapXRatio = isMobile
+        ? std::clamp(viewportW_ * 0.00015f, 0.04f, 0.08f)
+        : 0.15f;
+    const float kGapYRatio = isMobile ? 0.10f : 0.16f;
 
     // Nominal cascade depth budget (in card heights) below the top tableau card:
-    // Klondike: ~6-7 cards visible initially. 1.48 provides generous uncompressed spacing.
-    // FreeCell: 8 columns with 6-7 cards deal. 1.38 gives optimal initial fit.
-    // Spectre's Patience: Column 7 starts with 11 cards (Yukon deep deal), so 1.68 budget.
     float cascadeBudgetRatio = 1.48f;
     if (variant_ == GameVariant::FreeCell) {
         cascadeBudgetRatio = 1.38f;
@@ -213,31 +298,33 @@ void SolitaireBoard::computeLayout(float viewportWidth, float viewportHeight) {
     const float spanWPerCard = static_cast<float>(numCols) + static_cast<float>(numCols - 1) * kGapXRatio;
     const float maxW_fromWidth = availW / spanWPerCard;
 
-    // Vertical span = TopRow (1.0*h) + Gap (kGapYRatio*h) + TableauHead (1.0*h) + Cascade (cascadeBudgetRatio*h)
-    // where h = kCardAspect * w
-    const float spanHPerCard = kCardAspect * (2.0f + kGapYRatio + cascadeBudgetRatio);
+    // In bottom-stock mode, bottom rail needs a 1.0*h card row
+    const bool hasBottomStock = (effectiveStock != StockPosition::TopLeft) &&
+        (variant_ == GameVariant::KlondikeDraw1 || variant_ == GameVariant::KlondikeDraw3);
+    const float spanHPerCard = hasBottomStock
+        ? (kCardAspect * (3.0f + 2.0f * kGapYRatio + cascadeBudgetRatio))
+        : (kCardAspect * (2.0f + kGapYRatio + cascadeBudgetRatio));
     const float maxW_fromHeight = availH / spanHPerCard;
 
     // Optimal card scale: perfectly fits in center of display maximizing card size
-    // No artificial 118px cap! High-res monitors (1080p, 1440p, 4K) get huge, gorgeous cards up to 320px
+    // High-res monitors get cards up to 320px; small mobile viewports scale down smoothly without clipping
     const float optimalCardW = std::min(maxW_fromWidth, maxW_fromHeight);
-    cardW_ = std::clamp(optimalCardW, 52.0f, 320.0f);
+    const float minCardW = std::min(36.0f, maxW_fromWidth);
+    cardW_ = std::clamp(optimalCardW, minCardW, 320.0f);
     cardH_ = std::round(cardW_ * kCardAspect);
 
-    const float colGap = std::round(cardW_ * kGapXRatio);
-    const float rowGap = std::round(cardH_ * kGapYRatio);
+    const float colGap = std::max(2.0f, std::round(cardW_ * kGapXRatio));
+    const float rowGap = std::max(4.0f, std::round(cardH_ * kGapYRatio));
 
     // 2D Centering: Center the entire board both horizontally and vertically
     const float totalGridW = static_cast<float>(numCols) * cardW_ + static_cast<float>(numCols - 1) * colGap;
     const float startX = std::round((viewportW_ - totalGridW) * 0.5f);
 
-    const float nominalGridH = cardH_ * 2.0f + rowGap + std::round(cardH_ * cascadeBudgetRatio);
+    const float nominalGridH = cardH_ * (hasBottomStock ? 3.0f : 2.0f) + rowGap * (hasBottomStock ? 2.0f : 1.0f) + std::round(cardH_ * cascadeBudgetRatio);
     float topRowY = marginY;
     if (playfieldH > nominalGridH) {
-        // Center vertically within the felt table area, with an optimal upward bias (0.28)
-        // to leave abundant natural room for downward tableau cascades
         const float slackY = playfieldH - nominalGridH;
-        topRowY = std::round(marginY + slackY * 0.28f);
+        topRowY = std::round(marginY + slackY * (hasBottomStock ? 0.15f : 0.28f));
     }
     const float tableauY = topRowY + cardH_ + rowGap;
 
@@ -254,28 +341,87 @@ void SolitaireBoard::computeLayout(float viewportWidth, float viewportHeight) {
             piles_[8 + i].x = startX + static_cast<float>(i) * (cardW_ + colGap);
             piles_[8 + i].y = tableauY;
         }
-    } else {
-        piles_[0].x = startX;
-        piles_[0].y = topRowY;
-        piles_[1].x = startX + (cardW_ + colGap);
-        piles_[1].y = topRowY;
-
+    } else if (variant_ == GameVariant::SpectresPatience) {
+        // Spectre's Patience: 4 Foundations at top, 7 tableau columns
+        const float foundStartX = isMobile ? (startX + 1.5f * (cardW_ + colGap)) : (startX + 3.0f * (cardW_ + colGap));
         for (uint8_t i = 0; i < 4; ++i) {
-            piles_[2 + i].x = startX + static_cast<float>(3 + i) * (cardW_ + colGap);
-            piles_[2 + i].y = topRowY;
+            piles_[i].x = std::round(foundStartX + static_cast<float>(i) * (cardW_ + colGap));
+            piles_[i].y = topRowY;
         }
         for (uint8_t i = 0; i < 7; ++i) {
-            piles_[6 + i].x = startX + static_cast<float>(i) * (cardW_ + colGap);
-            piles_[6 + i].y = tableauY;
+            piles_[4 + i].x = startX + static_cast<float>(i) * (cardW_ + colGap);
+            piles_[4 + i].y = tableauY;
+        }
+    } else {
+        // Klondike Draw 1 & Draw 3
+        if (hasBottomStock) {
+            // Thumb-zone layout: 4 Foundations centered at top, Stock and Waste at bottom rail
+            const float foundStartX = startX + 1.5f * (cardW_ + colGap);
+            for (uint8_t i = 0; i < 4; ++i) {
+                piles_[2 + i].x = std::round(foundStartX + static_cast<float>(i) * (cardW_ + colGap));
+                piles_[2 + i].y = topRowY;
+            }
+            for (uint8_t i = 0; i < 7; ++i) {
+                piles_[6 + i].x = startX + static_cast<float>(i) * (cardW_ + colGap);
+                piles_[6 + i].y = tableauY;
+            }
+
+            const float bottomRailY = std::round(viewportH_ - bottomReserved - cardH_ - 4.0f);
+            if (effectiveStock == StockPosition::BottomRight) {
+                // Stock at column 6 (rightmost), Waste at column 5
+                piles_[0].x = startX + 6.0f * (cardW_ + colGap);
+                piles_[0].y = bottomRailY;
+                piles_[1].x = startX + 5.0f * (cardW_ + colGap);
+                piles_[1].y = bottomRailY;
+            } else {
+                // BottomLeft: Stock at column 0 (leftmost), Waste at column 1
+                piles_[0].x = startX;
+                piles_[0].y = bottomRailY;
+                piles_[1].x = startX + (cardW_ + colGap);
+                piles_[1].y = bottomRailY;
+            }
+        } else {
+            // Traditional Top-Left stock layout
+            piles_[0].x = startX;
+            piles_[0].y = topRowY;
+            piles_[1].x = startX + (cardW_ + colGap);
+            piles_[1].y = topRowY;
+
+            for (uint8_t i = 0; i < 4; ++i) {
+                piles_[2 + i].x = startX + static_cast<float>(3 + i) * (cardW_ + colGap);
+                piles_[2 + i].y = topRowY;
+            }
+            for (uint8_t i = 0; i < 7; ++i) {
+                piles_[6 + i].x = startX + static_cast<float>(i) * (cardW_ + colGap);
+                piles_[6 + i].y = tableauY;
+            }
         }
     }
 
     updateCardTargets();
 }
 
+void SolitaireBoard::setCardDeviation(float dev) noexcept {
+    cardDeviation_ = std::clamp(dev, 0.0f, 1.0f);
+    updateCardTargets();
+}
+
 void SolitaireBoard::updateCardTargets() {
-    // 14px safety clearance above bottom molding bar (botBarH = 42px)
-    const float maxTableauBottom = viewportH_ - 56.0f;
+    bool bottomStockActive = false;
+    float bottomRailStockY = viewportH_ - 56.0f;
+    if (variant_ == GameVariant::KlondikeDraw1 || variant_ == GameVariant::KlondikeDraw3) {
+        if (!piles_.empty() && piles_[0].y > (viewportH_ * 0.5f)) {
+            bottomStockActive = true;
+            bottomRailStockY = piles_[0].y - 8.0f;
+        }
+    }
+    // 14px safety clearance above bottom molding bar (or clearance above bottom stock)
+    const float maxTableauBottom = bottomStockActive ? bottomRailStockY : (viewportH_ - 56.0f);
+
+    // Vector-proportional deviation: 0% = 0px, 0 deg; 100% = up to +-10px, +-5 deg
+    const float cardScale = cardW_ / 96.0f;
+    const float maxPosDev = 10.0f * cardScale * cardDeviation_;
+    const float maxAngleRad = (5.0f * (kPi / 180.0f)) * cardDeviation_;
 
     for (auto& p : piles_) {
         if (p.type == PileType::Tableau) {
@@ -308,10 +454,10 @@ void SolitaireBoard::updateCardTargets() {
 
             float curY = p.y;
             for (size_t i = 0; i < p.cards.size(); ++i) {
-                // Hardwood 3.0 subtle organic micro-jitter for hand-dealt tableau feel
-                const float jx = cardHashNoise(seed_, p.cards[i].id, 101) * 0.85f;
-                const float jy = cardHashNoise(seed_, p.cards[i].id, 102) * 0.40f;
-                const float ja = cardHashNoise(seed_, p.cards[i].id, 103) * 0.0075f; // ~0.43 degrees
+                // Subtle organic tactile micro-jitter for hand-dealt tableau feel
+                const float jx = cardHashNoise(seed_, p.cards[i].id, 101) * maxPosDev;
+                const float jy = cardHashNoise(seed_, p.cards[i].id, 102) * (maxPosDev * 0.60f);
+                const float ja = cardHashNoise(seed_, p.cards[i].id, 103) * maxAngleRad;
 
                 p.cards[i].targetX = p.x + jx;
                 p.cards[i].targetY = curY + jy;
@@ -328,9 +474,9 @@ void SolitaireBoard::updateCardTargets() {
                     size_t visibleIdx = (i >= visibleStart) ? (i - visibleStart) : 0;
                     fanOffset = static_cast<float>(visibleIdx) * std::round(cardW_ * 0.22f);
                 }
-                const float jx = cardHashNoise(seed_, p.cards[i].id, 201) * 0.70f;
-                const float jy = cardHashNoise(seed_, p.cards[i].id, 202) * 0.50f;
-                const float ja = cardHashNoise(seed_, p.cards[i].id, 203) * 0.0065f;
+                const float jx = cardHashNoise(seed_, p.cards[i].id, 201) * (maxPosDev * 0.80f);
+                const float jy = cardHashNoise(seed_, p.cards[i].id, 202) * (maxPosDev * 0.70f);
+                const float ja = cardHashNoise(seed_, p.cards[i].id, 203) * (maxAngleRad * 0.85f);
 
                 p.cards[i].targetX = p.x + fanOffset + jx;
                 p.cards[i].targetY = p.y + jy;
@@ -339,10 +485,10 @@ void SolitaireBoard::updateCardTargets() {
             }
         } else if (p.type == PileType::Stock) {
             for (size_t i = 0; i < p.cards.size(); ++i) {
-                // Stratified physical deck edge thickness
-                const float jx = cardHashNoise(seed_, p.cards[i].id, 301) * 0.80f;
-                const float jy = cardHashNoise(seed_, p.cards[i].id, 302) * 0.80f;
-                const float ja = cardHashNoise(seed_, p.cards[i].id, 303) * 0.0070f;
+                // Stratified physical deck edge thickness & organic stacking
+                const float jx = cardHashNoise(seed_, p.cards[i].id, 301) * (maxPosDev * 0.75f);
+                const float jy = cardHashNoise(seed_, p.cards[i].id, 302) * (maxPosDev * 0.75f);
+                const float ja = cardHashNoise(seed_, p.cards[i].id, 303) * (maxAngleRad * 0.75f);
 
                 p.cards[i].targetX = p.x + jx;
                 p.cards[i].targetY = p.y + jy;
@@ -351,9 +497,9 @@ void SolitaireBoard::updateCardTargets() {
             }
         } else if (p.type == PileType::Foundation) {
             for (size_t i = 0; i < p.cards.size(); ++i) {
-                const float jx = cardHashNoise(seed_, p.cards[i].id, 401) * 0.60f;
-                const float jy = cardHashNoise(seed_, p.cards[i].id, 402) * 0.60f;
-                const float ja = cardHashNoise(seed_, p.cards[i].id, 403) * 0.0055f;
+                const float jx = cardHashNoise(seed_, p.cards[i].id, 401) * (maxPosDev * 0.60f);
+                const float jy = cardHashNoise(seed_, p.cards[i].id, 402) * (maxPosDev * 0.60f);
+                const float ja = cardHashNoise(seed_, p.cards[i].id, 403) * (maxAngleRad * 0.65f);
 
                 p.cards[i].targetX = p.x + jx;
                 p.cards[i].targetY = p.y + jy;
@@ -361,11 +507,15 @@ void SolitaireBoard::updateCardTargets() {
                 p.cards[i].targetElevation = 0.0f;
             }
         } else {
-            for (auto& c : p.cards) {
-                c.targetX = p.x;
-                c.targetY = p.y;
-                c.targetAngle = 0.0f;
-                c.targetElevation = 0.0f;
+            for (size_t i = 0; i < p.cards.size(); ++i) {
+                const float jx = cardHashNoise(seed_, p.cards[i].id, 501) * (maxPosDev * 0.60f);
+                const float jy = cardHashNoise(seed_, p.cards[i].id, 502) * (maxPosDev * 0.60f);
+                const float ja = cardHashNoise(seed_, p.cards[i].id, 503) * (maxAngleRad * 0.65f);
+
+                p.cards[i].targetX = p.x + jx;
+                p.cards[i].targetY = p.y + jy;
+                p.cards[i].targetAngle = ja;
+                p.cards[i].targetElevation = 0.0f;
             }
         }
     }
@@ -576,6 +726,17 @@ bool SolitaireBoard::smartMove(uint8_t fromPileIdx, size_t startCardIdx) {
 
     // 1. If single top card, try Foundation first (Hardwood 3.0 priority)
     if (startCardIdx + 1 == src.cards.size()) {
+        const Card& lead = src.cards[startCardIdx];
+        // If Ace, prioritize the matching foundation suit slot (Spades=0, Hearts=1, Diamonds=2, Clubs=3)
+        if (lead.rank == Rank::Ace) {
+            for (size_t i = 0; i < piles_.size(); ++i) {
+                if (piles_[i].type == PileType::Foundation &&
+                    (piles_[i].index % 4) == static_cast<uint8_t>(lead.suit) &&
+                    canMoveCards(fromPileIdx, startCardIdx, static_cast<uint8_t>(i))) {
+                    return executeMove(fromPileIdx, startCardIdx, static_cast<uint8_t>(i));
+                }
+            }
+        }
         for (size_t i = 0; i < piles_.size(); ++i) {
             if (piles_[i].type == PileType::Foundation &&
                 canMoveCards(fromPileIdx, startCardIdx, static_cast<uint8_t>(i))) {
@@ -618,6 +779,16 @@ bool SolitaireBoard::stepAutoFoundation() {
             continue;
         }
         const size_t topIdx = src.cards.size() - 1;
+        const Card& lead = src.cards[topIdx];
+        if (lead.rank == Rank::Ace) {
+            for (size_t d = 0; d < piles_.size(); ++d) {
+                if (piles_[d].type == PileType::Foundation &&
+                    (piles_[d].index % 4) == static_cast<uint8_t>(lead.suit) &&
+                    canMoveCards(static_cast<uint8_t>(s), topIdx, static_cast<uint8_t>(d))) {
+                    return executeMove(static_cast<uint8_t>(s), topIdx, static_cast<uint8_t>(d));
+                }
+            }
+        }
         for (size_t d = 0; d < piles_.size(); ++d) {
             if (piles_[d].type == PileType::Foundation &&
                 canMoveCards(static_cast<uint8_t>(s), topIdx, static_cast<uint8_t>(d))) {
@@ -649,6 +820,18 @@ HintMove SolitaireBoard::findBestHint() {
         const Pile& src = piles_[s];
         if (src.type == PileType::Foundation || src.type == PileType::Stock || src.cards.empty()) continue;
         size_t topIdx = src.cards.size() - 1;
+        const Card& lead = src.cards[topIdx];
+        if (lead.rank == Rank::Ace) {
+            for (size_t d = 0; d < piles_.size(); ++d) {
+                if (piles_[d].type == PileType::Foundation &&
+                    (piles_[d].index % 4) == static_cast<uint8_t>(lead.suit) &&
+                    canMoveCards(static_cast<uint8_t>(s), topIdx, static_cast<uint8_t>(d))) {
+                    activeHint_ = {true, static_cast<uint8_t>(s), static_cast<uint8_t>(topIdx), static_cast<uint8_t>(d)};
+                    piles_[s].cards[topIdx].enshadedGlow = true;
+                    return activeHint_;
+                }
+            }
+        }
         for (size_t d = 0; d < piles_.size(); ++d) {
             if (piles_[d].type == PileType::Foundation &&
                 canMoveCards(static_cast<uint8_t>(s), topIdx, static_cast<uint8_t>(d))) {
@@ -752,11 +935,15 @@ bool SolitaireBoard::hitTestCard(float px, float py, int& outPileIdx, int& outCa
     outPileIdx = -1;
     outCardIdx = -1;
 
+    // Responsive touch halo: expand hit targets on narrow/small cards for finger tapping
+    const float padX = (cardW_ < 64.0f) ? std::min(10.0f, (64.0f - cardW_) * 0.5f) : 0.0f;
+    const float padY = (cardH_ < 90.0f) ? std::min(10.0f, (90.0f - cardH_) * 0.5f) : 0.0f;
+
     // Test piles back-to-front, and cards top-to-bottom within each pile
     for (int pIdx = static_cast<int>(piles_.size()) - 1; pIdx >= 0; --pIdx) {
         const Pile& p = piles_[static_cast<size_t>(pIdx)];
         if (p.type == PileType::Stock) {
-            if (px >= p.x && px <= p.x + cardW_ && py >= p.y && py <= p.y + cardH_) {
+            if (px >= p.x - padX && px <= p.x + cardW_ + padX && py >= p.y - padY && py <= p.y + cardH_ + padY) {
                 outPileIdx = pIdx;
                 outCardIdx = p.cards.empty() ? -1 : static_cast<int>(p.cards.size()) - 1;
                 return true;
@@ -766,7 +953,7 @@ bool SolitaireBoard::hitTestCard(float px, float py, int& outPileIdx, int& outCa
 
         for (int cIdx = static_cast<int>(p.cards.size()) - 1; cIdx >= 0; --cIdx) {
             const Card& c = p.cards[static_cast<size_t>(cIdx)];
-            if (px >= c.x && px <= c.x + cardW_ && py >= c.y && py <= c.y + cardH_) {
+            if (px >= c.x - padX && px <= c.x + cardW_ + padX && py >= c.y - padY && py <= c.y + cardH_ + padY) {
                 // In Waste/Foundation/FreeCell, only the top card is interactive
                 if (p.type != PileType::Tableau && cIdx != static_cast<int>(p.cards.size()) - 1) {
                     continue;
@@ -785,7 +972,7 @@ bool SolitaireBoard::hitTestCard(float px, float py, int& outPileIdx, int& outCa
 
 int SolitaireBoard::findBestDropPile(uint8_t fromPileIdx, size_t startCardIdx, float dropCenterX, float dropCenterY) const noexcept {
     int bestPile = -1;
-    float bestDist = cardW_ * 1.15f; // Generous Hardwood 3.0 magnetic snap radius
+    float bestDist = std::max(cardW_ * 1.15f, 54.0f); // Generous Hardwood 3.0 magnetic snap radius
 
     for (size_t d = 0; d < piles_.size(); ++d) {
         if (d == fromPileIdx) continue;

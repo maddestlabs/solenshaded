@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 
 namespace eatsbits::ui {
     class BatchRenderer2D;
@@ -50,11 +51,16 @@ struct CardTexture {
 };
 
 enum class DeckThemeId : uint8_t {
-    ClassicSvg  = 0,
-    SteampunkAi = 1,
-    Anime       = 2,
-    Cyberpunk   = 3,
-    Custom      = 4,
+    SolEnshade       = 0,
+    ClassicSvg       = 1,
+    SteampunkAi      = 2,
+    Anime            = 3,
+    Cyberpunk        = 4,
+    BaroqueNoir      = 5,
+    BaroqueLight     = 6,
+    BaroqueAlabaster = BaroqueLight,
+    BaroqueDark      = 7,
+    Custom           = 8,
     Count
 };
 
@@ -62,8 +68,24 @@ enum class CardWearLevel : uint8_t {
     Pristine = 0,    // Pure original crisp vector/bitmap art (digital clean)
     Natural  = 1,    // Authentic playing card: warm ivory stock, softened press inks, micro-linen air-cushion finish
     Played   = 2,    // Gently handled: finger oils/vignette along edges, softened borders, slight corner scuffs
-    Vintage  = 3,    // Aged deck: sepia oxidation patina, irregular corner fiber wear, subtle edge chipping
+    Vintage  = 3,    // Aged deck: sepia oxidation, deckled fibrous edges, foxing spots, pulp core wear
     Count    = 4
+};
+
+enum class CardStock : uint8_t {
+    CasinoLinen     = 0, // Embossed casino cambric/air-cushion linen finish
+    AntiqueLaid     = 1, // Traditional 18th/19th century laid paper: wire ribbing & chain lines
+    CottonRag       = 2, // Heavy fibrous cotton rag pasteboard: multi-directional tooth & raw pulp
+    SmoothParchment = 3, // Calendered smooth satin playing card stock with micro-grain
+    Count           = 4
+};
+
+enum class CardCornerStyle : uint8_t {
+    Auto    = 0, // Follows deck designated corner radius (defaults to 24px if none)
+    Sharp   = 1, // Forced 0px sharp square corners
+    Vintage = 2, // Forced 8px subtle vintage corners
+    Round   = 3, // Forced 24px modern casino round corners
+    Count   = 4
 };
 
 class CardTextureCache {
@@ -72,6 +94,8 @@ public:
 
     static constexpr int kDefaultCardW = 360;
     static constexpr int kDefaultCardH = 504;
+    static constexpr size_t kCardBackIndex = 52;
+    static constexpr size_t kTotalTextures = 53;
 
     bool initialize(int cardW = kDefaultCardW, int cardH = kDefaultCardH);
     bool loadEatsDeck(const std::string& eatsFilePath, int cardW = kDefaultCardW, int cardH = kDefaultCardH);
@@ -92,6 +116,79 @@ public:
     [[nodiscard]] CardWearLevel cardWearLevel() const noexcept { return wearLevel_; }
     void setCardWearLevel(CardWearLevel level);
     static const char* cardWearLevelName(CardWearLevel level) noexcept;
+
+    [[nodiscard]] CardStock cardStock() const noexcept { return cardStock_; }
+    void setCardStock(CardStock stock);
+    static const char* cardStockName(CardStock stock) noexcept;
+
+    [[nodiscard]] float deckCornerRadius() const noexcept { return deckCornerRadius_; }
+    void setDeckCornerRadius(float r) noexcept { deckCornerRadius_ = std::max(0.0f, r); }
+
+    [[nodiscard]] CardCornerStyle cornerStyle() const noexcept { return cornerStyle_; }
+    void setCornerStyle(CardCornerStyle style) noexcept { cornerStyle_ = style; }
+
+    [[nodiscard]] float effectiveCornerRadius() const noexcept {
+        switch (cornerStyle_) {
+            case CardCornerStyle::Sharp:   return 0.0f;
+            case CardCornerStyle::Vintage: return 8.0f;
+            case CardCornerStyle::Round:   return 24.0f;
+            case CardCornerStyle::Auto:
+            default:
+                return deckCornerRadius_;
+        }
+    }
+
+    [[nodiscard]] float effectiveRu() const noexcept {
+        return effectiveCornerRadius() / static_cast<float>(kDefaultCardW);
+    }
+
+    [[nodiscard]] float effectiveRv() const noexcept {
+        return effectiveCornerRadius() / static_cast<float>(kDefaultCardH);
+    }
+
+    static const char* cornerStyleName(CardCornerStyle style) noexcept;
+
+    struct StagingDeck {
+        std::array<CardTexture, kTotalTextures> baseTextures;
+        std::array<CardTexture, kTotalTextures> textures;
+        DeckThemeId theme{DeckThemeId::SolEnshade};
+        CardWearLevel wearLevel{CardWearLevel::Natural};
+        CardStock cardStock{CardStock::SmoothParchment};
+        int cardW{kDefaultCardW};
+        int cardH{kDefaultCardH};
+        bool hasNewBase{false};
+    };
+
+    using ProgressCallback = std::function<bool(float progress, const std::string& status)>;
+
+    // Staged offline conditioning / baking - completely isolated from active textures
+    bool bakeStagedConditioning(
+        StagingDeck& staging,
+        CardWearLevel wear,
+        CardStock stock,
+        const ProgressCallback& onProgress = nullptr
+    );
+
+    bool loadBaseDeckTheme(
+        DeckThemeId theme,
+        int cardW,
+        int cardH,
+        std::array<CardTexture, kTotalTextures>& outBase
+    );
+
+    bool loadStagedDeckTheme(
+        StagingDeck& staging,
+        DeckThemeId theme,
+        CardWearLevel wear,
+        CardStock stock,
+        int cardW = kDefaultCardW,
+        int cardH = kDefaultCardH,
+        const ProgressCallback& onProgress = nullptr
+    );
+
+    void commitStagedDeck(StagingDeck&& staging);
+
+    void applyConditioningAndSync(CardWearLevel wear, CardStock stock);
     void applyConditioningAndSync(CardWearLevel wear);
 
     [[nodiscard]] const CardTexture* getCardTexture(Suit s, Rank r) const noexcept;
@@ -103,15 +200,14 @@ public:
     [[nodiscard]] const CardAtlasSlot& getBackAtlasSlot() const noexcept;
     [[nodiscard]] const CardAtlasSlot& getAtlasSlotByIndex(size_t index) const noexcept;
     [[nodiscard]] bool hasGpuAtlas() const noexcept { return hasGpuAtlas_; }
+    [[nodiscard]] bool isAtlasDirty() const noexcept { return atlasDirty_; }
+    void markAtlasClean() noexcept { atlasDirty_ = false; }
 
     [[nodiscard]] bool isLoaded() const noexcept { return isLoaded_; }
     [[nodiscard]] int cardWidth() const noexcept { return cardW_; }
     [[nodiscard]] int cardHeight() const noexcept { return cardH_; }
     [[nodiscard]] DeckThemeId currentDeckTheme() const noexcept { return currentTheme_; }
     static const char* deckThemeName(DeckThemeId theme) noexcept;
-
-    static constexpr size_t kCardBackIndex = 52;
-    static constexpr size_t kTotalTextures = 53;
 
     static inline size_t cardIndex(Suit s, Rank r) noexcept {
         size_t suitIdx = static_cast<size_t>(s);
@@ -126,8 +222,12 @@ private:
     int cardH_{280};
     bool isLoaded_{false};
     bool hasGpuAtlas_{false};
-    DeckThemeId currentTheme_{DeckThemeId::ClassicSvg};
+    bool atlasDirty_{false};
+    DeckThemeId currentTheme_{DeckThemeId::SolEnshade};
     CardWearLevel wearLevel_{CardWearLevel::Natural};
+    CardStock cardStock_{CardStock::SmoothParchment};
+    float deckCornerRadius_{24.0f};
+    CardCornerStyle cornerStyle_{CardCornerStyle::Auto};
     std::array<CardTexture, kTotalTextures> baseTextures_{};
     std::array<CardTexture, kTotalTextures> textures_{};
     std::array<CardAtlasSlot, kTotalTextures> atlasSlots_{};

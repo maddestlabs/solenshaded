@@ -158,7 +158,9 @@ std::shared_ptr<Stmt> Parser::parseIfStatement() {
 
     std::vector<std::shared_ptr<Stmt>> elseBranch;
     skipNewlines();
-    if (match(TokenType::Else)) {
+    if (match(TokenType::Elif)) {
+        elseBranch.push_back(parseIfStatement());
+    } else if (match(TokenType::Else)) {
         consume(TokenType::Colon, "Expected ':' after else");
         skipNewlines();
         elseBranch = parseBlock();

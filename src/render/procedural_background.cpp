@@ -296,6 +296,10 @@ void renderVectorFallback(
     uint32_t seed
 ) {
     switch (theme) {
+        case TableThemeId::PastelTan:
+            r.drawRect(x, y, w, h, 0.83f, 0.77f, 0.69f, 1.0f);
+            r.drawRectVignette(x, y, w, h, 0.0f, 0.15f, 0.68f, 0.61f, 0.52f);
+            break;
         case TableThemeId::EmeraldLawn:
             renderLinenCanvas(r, x, y, w, h, 0.08f, 0.28f, 0.14f, light, seed);
             break;
@@ -361,6 +365,7 @@ struct PbrTextureData {
 std::string resolveThemePath(const std::string& filename) {
     const std::string candidates[] = {
         "themes/" + filename,
+        "/themes/" + filename,
         "../themes/" + filename,
         "../../themes/" + filename,
         "assets/themes/" + filename,
@@ -379,6 +384,7 @@ std::string resolveThemePath(const std::string& filename) {
 std::string resolveTexturePath(const std::string& filename) {
     const std::string candidates[] = {
         "textures/" + filename,
+        "/textures/" + filename,
         "../textures/" + filename,
         "../../textures/" + filename,
         filename
@@ -394,6 +400,8 @@ std::string resolveTexturePath(const std::string& filename) {
 
 const PbrMaterialDef* getMaterialDefForTheme(TableThemeId theme) {
     switch (theme) {
+        case TableThemeId::PastelTan:
+            return nullptr;
         case TableThemeId::EmeraldLawn: {
             static const PbrMaterialDef d{
                 "Fabric037", "emerald_lawn", 2.8f, 1.25f, 0.18f, 0.26f, 0.85f, 0.50f, 1.15f, 0.65f
@@ -1094,6 +1102,53 @@ void ProceduralBackgroundSystem::invalidateCache() noexcept {
     }
 }
 
+bool ProceduralBackgroundSystem::prebakeTheme(
+    TableThemeId theme,
+    float w, float h,
+    const eatsbits::ui::LightSource2D& light,
+    const std::function<bool(float progress, const std::string& status)>& onProgress
+) {
+    if (!impl_) return false;
+
+    if (onProgress && !onProgress(0.10f, "Analyzing theme material definition...")) {
+        return false;
+    }
+
+    const PbrMaterialDef* def = getMaterialDefForTheme(theme);
+    if (!def) {
+        if (onProgress) onProgress(1.0f, "Vector table surface ready.");
+        return true;
+    }
+
+    if (onProgress && !onProgress(0.30f, "Synthesizing procedural PBR normal & color maps...")) {
+        return false;
+    }
+
+    if (!impl_->ensureMaterial(theme, *def)) {
+        if (onProgress) onProgress(1.0f, "Procedural surface fallback ready.");
+        return true;
+    }
+
+    if (onProgress && !onProgress(0.60f, "Baking Blinn-Phong specular & normal-mapped relief...")) {
+        return false;
+    }
+
+    const auto& tex = impl_->materials[theme];
+    const auto& activeDef = impl_->materialDefs[theme];
+
+    if (bakePbrSurface(tex, activeDef, 0.0f, 0.0f, w, h, light, impl_->cachedBakedRgba, impl_->cachedW, impl_->cachedH)) {
+        impl_->cachedCustom = false;
+        impl_->cachedTheme = theme;
+        impl_->cachedLightX = light.x;
+        impl_->cachedLightY = light.y;
+    }
+
+    if (onProgress && !onProgress(1.0f, "Table surface synthesis complete.")) {
+        return false;
+    }
+    return true;
+}
+
 void ProceduralBackgroundSystem::setPbrTexturesEnabled(bool enable) noexcept {
     if (impl_) {
         impl_->pbrEnabled = enable;
@@ -1235,6 +1290,13 @@ void ProceduralBackgroundSystem::renderBackground(
     uint32_t seed
 ) {
     if (w <= 0.0f || h <= 0.0f) return;
+
+    if (theme == TableThemeId::PastelTan) {
+        // Pure solid pastel tan background: zero baking, instant clear & draw
+        r.drawRect(x, y, w, h, 0.83f, 0.77f, 0.69f, 1.0f);
+        r.drawRectVignette(x, y, w, h, 0.0f, 0.15f, 0.68f, 0.61f, 0.52f);
+        return;
+    }
 
     if (impl_ && impl_->pbrEnabled) {
         // 1. Check if custom user-loaded .eats theme is active

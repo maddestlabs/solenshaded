@@ -76,7 +76,29 @@ Generated prompts in `get_card_prompt()` dynamically inject strict color rules:
 - **Black Suits (Spades & Clubs):**
   > *"BLACK SUIT COLOR REQUIREMENT: This is a BLACK suit. The corner rank, corner pip, and primary suit symbols MUST be deep solid charcoal-black (`#111111`), accented with antique copper and brass metallic details."*
 
-### B. Corner Indices & Framing Instructions
+### B. Mandatory Full-Bleed Flat Texture & 5:7 Proportions (CRITICAL ANTI-SHADOW POLICY)
+
+> [!CAUTION]
+> **Strict Prohibition on Simulated Drop Shadows, Padding, and Tabletop Photography:**  
+> AI diffusion and image models frequently misinterpret playing card requests as prompts to generate a 3D photograph of a physical card resting on a wooden desk, felt surface, or neutral tabletop, baking simulated drop shadows around the card borders and adding surrounding margins/padding.
+>
+> **Why post-crop fails:**
+> 1. **Baked-in Shadows:** Simulated drop shadows cast onto the background bleed into the outer ornate frame bevels; cropping cannot remove the shadows without cutting into the rosettes or leaving an asymmetrical dark fringe.
+> 2. **Aspect Ratio Distortion:** Squeezing unconditioned images (e.g. 1:1.49) into standard 5:7 playing card proportions ($360 \times 504$, 1:1.40) noticeably squashes the artwork vertically and introduces interpolation artifacts.
+> 3. **Cascade Misalignment:** In Solitaire tableau cascades, cards overlap. Any baked drop shadows or outer padding break the planar alignment of the tableau and produce ugly dark borders inside the game.
+
+**Mandatory Generation Rules for All Decks:**
+1. **Texture-Only Output (Zero Perspective):** The generated image MUST be a flat digital 2D card texture blitted edge-to-edge. The 4 outer pixel borders of the image ($x=0, y=0, x=W-1, y=H-1$) ARE the card's physical perimeter.
+2. **Strict Negative Prompts in Manifests:**
+   All card prompt generators must append:  
+   `"STRICT NEGATIVE CONSTRAINTS: flat digital card face texture only, edge-to-edge full bleed, zero external drop shadow, no tabletop, no background surface, no photograph of a card, no white/grey/dark border padding, no margin, no perspective tilt."`
+3. **1:1 Structural Template Conditioning:**
+   Every generated card MUST be conditioned against the corresponding sliced classic template ([`assets/deck_cards/classic/png/<card>.png`](file:///c:/git/solenshaded/assets/deck_cards/classic/png)) at exact $360 \times 504$ resolution (5:7 ratio).
+4. **Style References:**
+   When an external style reference image is provided (such as an engraving photograph), the prompt must explicitly state:  
+   `"Extract ONLY the ornamental relief motifs, linework, and metallic shading from the style reference. DO NOT copy its aspect ratio, border margins, background surface, or external shadows. Render the design flat and full-bleed across the 5:7 card layout."`
+
+### C. Corner Indices & Framing Instructions
 Corner pips and rank letters are explicitly instructed to prevent AI models from cropping or generating empty card borders:
 > *"Corner Indices: Clear, legible rank '{rank}' and suit symbol '{symbol}' in the top-left and inverted in the bottom-right corners, inside the card border."*
 
@@ -158,9 +180,19 @@ python tools/deck_pipeline.py assemble \
     --out decks/steampunk_svg.svg
 ```
 
+### 6. Hone & Surgical Alignment Pipeline (Baroque Noir & Themed Decks)
+Deterministically normalizes geometry, inlays authentic background textures to full bleed (zero black letterbox borders), and calibrates gameplay contrast/bloom without altering face portraits or character engravings:
+```bash
+python tools/hone_baroque_noir.py
+```
+- **Geometry & Alignment:** Anchors scale and centering to the 2 of Clubs ($W=344, H=496, cx=180.0, cy=252.0$).
+- **Full Bleed:** Replaces outer dark margins with seamless slate cardstock texture with authentic paper grain.
+- **Red Bloom:** Calibrates radiant ruby halo on Hearts and Diamonds against the Ace of Hearts baseline.
+- **Black Contrast:** Darkens Spades and Clubs pips to obsidian black (#111111) matching the Aces for mobile readability.
+
 ---
 
-## 6. Engine Integration & Binary Caching
+## 7. Engine Integration & Binary Caching
 
 In [`src/render/card_texture_cache.cpp`](file:///c:/git/solenshaded/src/render/card_texture_cache.cpp):
 1. **Timestamp Freshness:** When loading `decks/steampunk.png`, the engine checks for `decks/steampunk.bin`. If the `.bin` exists and is newer than the source image, it loads in $\sim 2\text{ ms}$. If the PNG has been reassembled, the cache is automatically invalidated and refreshed.

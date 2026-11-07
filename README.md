@@ -58,3 +58,23 @@ In the world of Eatscharted, **Shades**—incorporeal remnants inspired by *ZAng
 - **[Deck Pipeline & AI Generation Guide (`DECK_PIPELINE.md`)](file:///c:/git/solenshaded/DECK_PIPELINE.md):** Complete guide to the dual vector/bitmap pipeline, Gemini multimodal style-reference conditioning, red/black solitaire contrast rules, and CLI tools.
 - **[Eatscript Custom Deck Architecture (`EATSCRIPT_CARD_CUSTOMIZATION.md`)](file:///c:/git/solenshaded/EATSCRIPT_CARD_CUSTOMIZATION.md):** Specification for user-scripted vector card rendering via Eatscript and zero-overhead retained display lists.
 - **[Agent & Build Safety Rules (`AGENTS.md`)](file:///c:/git/solenshaded/AGENTS.md):** Strict policies prohibiting automated test execution and background GPU/audio processes.
+
+## TODO
+
+- Procgen baroque art
+- loading bars for decks and other heavy lifting
+- New seed at startup. How will this affect procgen? Use different seed for procgen?
+- ~~Card textures. We already have age/wear factor, implement realistic card textures so even default deck looks like real deck.~~
+- Proper settings menu. Use Eatsbits Settings menu as base to build on.
+- Icons for all settings and actions
+- Allow editing of seed (via url for web build)
+
+### Load time
+Load speed is crucial. We need this thing to load instantly, no delays. So we need to start with very minimal aesthetics; maybe even solid color background, dead simple card graphics, lowest level effects (cheapest card stock texture, cheapest wear setting). This isn't a text editor so we don't need monospace fonts, we just need our single bundled condensed font and our api for more specifics.
+
+### Baroque Noir
+This is the most impressive card deck in modern solitaire gaming. So we need to hone this deck.
+- Cards are currently mostly uncentered and most are heavily misaligned and inconsistent with both positioning and scale. We need to ensure consistency in alignment and scale. 2 of Clubs is perfectly centered and scaled but there's black/dark margins to left and right. The card's gray-ish texture background should extend fully to left and right. And that should be our baseline. All cards should be positioned and scaled like 2 of Clubs. And our gray-ish texture background should extend throughout the individual card textures to the ends so there are no margins.
+- Red cards, Ace of Hearts (and to a fair degree Jack of Hearts and King of Hearts, though the bloom is a slight bit heavier than needed) represents the optimal glow/bloom lighting of diamonds and hearts. The glow is important to help users easily differentiate red and black cards especially on tinier mobile screens.
+- Black cards, Ace of Spades and Ace of Clubs represent optimal color and lighting to differentiate clubs and spades from the rest of the background. The club and spade elements are noticeably darker than the other decorative elements, which makes it easy for users to discern which suit the card belongs to.
+- We must maintain the current art, the card faces provide the perfect aesthetic and we can't lose that in redesigning. Can we redesign the other elements without affecting these? We're basically redesigning around these.

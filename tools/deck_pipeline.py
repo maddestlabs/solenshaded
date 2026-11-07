@@ -286,7 +286,7 @@ def get_card_prompt(name, theme):
             f"high-contrast lighting against dark obsidian tech cardstock, no blur, no realistic photo noise, edge-to-edge card layout."
         )
 
-    elif "baroque" in theme_lower or "gothic" in theme_lower or "noir" in theme_lower or "filigree" in theme_lower:
+    elif ("noir" in theme_lower or "dark" in theme_lower or "gothic" in theme_lower or (("baroque" in theme_lower or "filigree" in theme_lower) and "alabaster" not in theme_lower and "ivory" not in theme_lower and "light" not in theme_lower)):
         # Specialized dark gothic baroque / ornate filigree relief prompt builder
         if "king" in name:
             subject = (
@@ -323,8 +323,8 @@ def get_card_prompt(name, theme):
             color_rule = (
                 f"VIVID CRIMSON RED SUIT COLOR REQUIREMENT (CRITICAL FOR SOLITAIRE PLAYABILITY): "
                 f"This is a RED suit ({suit.capitalize()}). The corner rank '{rank_label}', corner {suit_sym} pip, "
-                f"and primary suit symbols MUST be rich, luminous radiant ruby crimson enamel (#C8102E / #E0115F) with polished silver and rose-gold bevels. "
-                f"Do NOT make the symbols black or monochrome pewter. The red must be unmistakable, bold, and high-contrast against the dark charcoal cardstock. "
+                f"and primary suit symbols MUST be intensely prominent, radiant ruby crimson enamel (#FF0033 / #E60026) with a luminous light bloom / radiant neon halo effect glowing vividly against the dark slate background with polished silver and rose-gold bevels. "
+                f"Do NOT make the symbols black or monochrome pewter. The red bloom must be unmistakable, bold, and high-contrast against the dark charcoal cardstock. "
             )
         elif suit in ("spades", "clubs"):
             color_rule = (
@@ -336,9 +336,69 @@ def get_card_prompt(name, theme):
             color_rule = "Ornate antique silver and dark pewter palette with dramatic chiaroscuro contrast against dark cardstock. "
 
         art_style = (
-            f"Dark baroque high-relief metal sculpture and luxury playing card art, ornate chiseled antique silver, oxidized pewter, and gunmetal filigree, "
-            f"dimensional 3D baroque acanthus scrollwork and rococo flourishes, on deep dark slate/charcoal cardstock, dramatic chiaroscuro rim lighting, "
-            f"impeccable symmetry, crisp edges, no blur, standard 5:7 portrait playing card proportions, edge-to-edge card layout."
+            f"Flat 2D digital playing card face graphic texture blitted directly edge-to-edge on a 5:7 canvas. "
+            f"Archaic dark slate and charcoal obsidian cardstock with authentic subtle surface grain inconsistencies, organic paper tooth, and mottled dark patina of the original Baroque Noir background. "
+            f"Bas-relief sculpted chiseled antique silver, oxidized pewter, and gunmetal filigree, dimensional acanthus scrollwork and rococo flourishes, "
+            f"prominent radiant ruby crimson bloom on all red elements, dramatic chiaroscuro rim lighting, impeccable symmetry, crisp edges, no blur, standard 5:7 portrait playing card proportions. "
+            f"STRICT PROHIBITIONS: NO external drop shadows, NO border margins, NO padding, NO tabletop surface, NO background surface, NO photograph of a card. The 4 edges of the image ARE the physical perimeter of the card."
+
+
+        )
+
+    elif "alabaster" in theme_lower or "ivory" in theme_lower or "porcelain" in theme_lower or "white" in theme_lower or "light" in theme_lower:
+        # Specialized light ivory/alabaster cardstock with dark metal relief and glowing ruby bloom
+        if "king" in name:
+            subject = (
+                f"Regal Baroque Monarch King of {suit.capitalize()} sculpted in high-relief dark oxidized pewter and blackened steel plate armor, "
+                f"noble robes, holding an ornate ceremonial scepter or sword with {suit_sym} heraldic crest, framed in an acanthus scrollwork cartouche"
+            )
+        elif "queen" in name:
+            subject = (
+                f"Majestic Baroque Queen of {suit.capitalize()} sculpted in chiseled dark metal and antique silver, wearing an intricate tiara, lace ruff, "
+                f"holding an engraved baroque {suit_sym} mirror or talisman, framed in layered 3D rococo floral filigree"
+            )
+        elif "jack" in name:
+            subject = (
+                f"Dashing young Baroque Jack knight of {suit.capitalize()} in embossed dark pewter plate armor with baroque scroll engravings, "
+                f"holding an engraved dueling rapier with {suit_sym} pommel, surrounded by baroque leaf flourishes"
+            )
+        elif "ace" in name:
+            subject = (
+                f"Monumental central ornate {suit.capitalize()} ace emblem sculpted in 3D dark pewter and blackened steel with interior floral filigree, "
+                f"encased in an opulent baroque acanthus cartouche and grand sculpted dark metal flourish frame"
+            )
+        elif "joker" in name:
+            subject = (
+                f"Mysterious Baroque masquerade jester in an ornate sculpted dark silver and blackened steel Venetian mask, "
+                f"holding a silver scepter with bells and juggling miniature ornate cards, surrounded by baroque scrollwork"
+            )
+        else:
+            subject = (
+                f"Standard playing card layout with {rank_label} of {suit.capitalize()} featuring sculpted 3D relief {suit_sym} pips "
+                f"adorned with delicate interior filigree and ornate baroque leaf accents, surrounded by a slender rococo acanthus border frame"
+            )
+
+        if suit in ("hearts", "diamonds"):
+            color_rule = (
+                f"VIVID GLOWING RUBY CRIMSON SUIT REQUIREMENT WITH BLOOM (SOLITAIRE READABILITY): "
+                f"This is a RED suit ({suit.capitalize()}). All primary suit symbols, pips, and corner rank '{rank_label}' indices "
+                f"MUST feature a radiant, luminous glowing ruby crimson enamel (#FF0033 / #E60026) with an ethereal light bloom / neon halo effect "
+                f"set inside the dark sculpted metal. The glowing red must be intensely bright, unmistakably vibrant, and distinct from black suits. "
+            )
+        elif suit in ("spades", "clubs"):
+            color_rule = (
+                f"DARK SCULPTED METAL SUIT REQUIREMENT: This is a BLACK suit ({suit.capitalize()}). "
+                f"The corner rank '{rank_label}', corner {suit_sym} pip, and primary suit symbols MUST be deep solid obsidian black (#111111) "
+                f"and sculpted antique dark pewter / blackened damascene steel (#2A2D34) with sharp metallic highlights. "
+            )
+        else:
+            color_rule = "Dark sculpted metal with selective radiant crimson glow against ivory cardstock. "
+
+        art_style = (
+            f"Flat 2D digital playing card face graphic texture blitted directly edge-to-edge on a 5:7 canvas. "
+            f"Bas-relief sculpted dark metallic artwork on warm antique ivory / alabaster porcelain cardstock background (#FAF8F5), "
+            f"crisp sharp silhouettes, radiant bloom glow on red elements, impeccable symmetry, no blur, standard 5:7 portrait playing card proportions. "
+            f"STRICT PROHIBITIONS: NO external drop shadows, NO border margins, NO padding, NO tabletop surface, NO background surface, NO photograph of a card. The 4 edges of the image ARE the physical perimeter of the card."
         )
 
     else:
@@ -647,6 +707,102 @@ def assemble_deck(args):
 
     print(f"[SolEnshaded] Successfully assembled master SVG: {out_svg} ({custom_count}/54 custom cards, {os.path.getsize(out_svg)} bytes)")
 
+def get_card_crop_box(img_path):
+    """
+    Automatically detects the card's outer frame within an AI-generated image
+    and computes a standard 5:7 playing card crop box centered on the card,
+    removing surrounding margins, tabletop, or padding.
+    """
+    try:
+        import cv2
+        import numpy as np
+        img = cv2.imread(img_path)
+        if img is None:
+            return None
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        h, w = gray.shape
+
+        left = 30 + int(np.argmax(edges[:, 30:110].sum(axis=0)))
+        right = w - 110 + int(np.argmax(edges[:, w-110:w-30].sum(axis=0)))
+        top = 80 + int(np.argmax(edges[80:180, :].sum(axis=1)))
+        bottom = h - 180 + int(np.argmax(edges[h-180:h-80, :].sum(axis=1)))
+
+        card_w = right - left
+        card_h = bottom - top
+        if card_w < w * 0.5 or card_h < h * 0.5:
+            return (0, 0, w, h)
+
+        cx = (left + right) / 2.0
+        cy = (top + bottom) / 2.0
+
+        margin_x = int(card_w * 0.025)
+        margin_y = int(card_h * 0.025)
+
+        target_ratio = 5.0 / 7.0
+        eff_w = card_w + 2 * margin_x
+        eff_h = card_h + 2 * margin_y
+
+        if eff_w / eff_h < target_ratio:
+            crop_h = eff_h
+            crop_w = int(round(crop_h * target_ratio))
+        else:
+            crop_w = eff_w
+            crop_h = int(round(crop_w / target_ratio))
+
+        x0 = int(round(cx - crop_w / 2.0))
+        x1 = x0 + crop_w
+        y0 = int(round(cy - crop_h / 2.0))
+        y1 = y0 + crop_h
+
+        if x0 < 0:
+            x1 -= x0; x0 = 0
+        if x1 > w:
+            x0 -= (x1 - w); x1 = w
+        if y0 < 0:
+            y1 -= y0; y0 = 0
+        if y1 > h:
+            y0 -= (y1 - h); y1 = h
+
+        return (max(0, x0), max(0, y0), min(w, x1), min(h, y1))
+    except Exception as e:
+        print(f"  Warning: crop detection failed for {img_path}: {e}")
+        return None
+
+
+def crop_cards_deck(args):
+    import shutil, glob
+    cards_dir = args.cards_dir
+    target_w = getattr(args, "target_width", 360)
+    target_h = getattr(args, "target_height", 504)
+    backup_dir = getattr(args, "backup_dir", None)
+    if not backup_dir:
+        backup_dir = os.path.join(cards_dir, "..", "raw")
+    backup_dir = os.path.normpath(backup_dir)
+    os.makedirs(backup_dir, exist_ok=True)
+
+    print(f"[SolEnshaded] Cropping cards in {cards_dir} to {target_w}x{target_h} (5:7 ratio)...")
+    print(f"  Backing up original uncropped PNGs to {backup_dir}...")
+
+    png_files = glob.glob(os.path.join(cards_dir, "*.png"))
+    processed = 0
+    for p in png_files:
+        fname = os.path.basename(p)
+        raw_backup = os.path.join(backup_dir, fname)
+        if not os.path.exists(raw_backup):
+            shutil.copy2(p, raw_backup)
+
+        box = get_card_crop_box(raw_backup)
+        img = Image.open(raw_backup).convert("RGBA")
+        if box:
+            img = img.crop(box)
+        img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+        img.save(p, "PNG")
+        processed += 1
+
+    print(f"[SolEnshaded] Successfully cropped and updated {processed} card PNGs in {cards_dir}!")
+
+
 def assemble_bitmap_deck(args):
     png_dir = args.cards_dir
     out_png = args.out or "decks/steampunk.png"
@@ -688,6 +844,10 @@ def assemble_bitmap_deck(args):
 
         if os.path.exists(card_path):
             card_img = Image.open(card_path).convert("RGBA")
+            if getattr(args, "auto_crop", False):
+                box = get_card_crop_box(card_path)
+                if box:
+                    card_img = card_img.crop(box)
             if card_img.size != (target_w, target_h):
                 card_img = card_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
             master_img.paste(card_img, (x, y))
@@ -770,6 +930,14 @@ def main():
     p_asm_bmp.add_argument("--card-width", type=int, default=360, help="Per-card width in pixels (default 360)")
     p_asm_bmp.add_argument("--card-height", type=int, default=504, help="Per-card height in pixels (default 504)")
     p_asm_bmp.add_argument("--fallback-dir", default=None, help="Directory containing fallback card PNGs (e.g. assets/deck_cards/classic/png)")
+    p_asm_bmp.add_argument("--auto-crop", action="store_true", default=False, help="Automatically crop outer margins/padding to 5:7 aspect ratio")
+
+    # crop-cards
+    p_crop = subparsers.add_parser("crop-cards", help="Batch crop cards to 5:7 aspect ratio, removing outer padding")
+    p_crop.add_argument("--cards-dir", required=True, help="Directory containing card PNGs to crop in place")
+    p_crop.add_argument("--backup-dir", default=None, help="Directory to back up original uncropped PNGs")
+    p_crop.add_argument("--target-width", type=int, default=360)
+    p_crop.add_argument("--target-height", type=int, default=504)
 
     # package-eats
     p_pkg = subparsers.add_parser("package-eats", help="Package SVG/PNG deck into compressed .eats deck recipe")
@@ -801,6 +969,8 @@ def main():
         assemble_deck(args)
     elif args.command == "assemble-bitmap":
         assemble_bitmap_deck(args)
+    elif args.command == "crop-cards":
+        crop_cards_deck(args)
     elif args.command == "package-eats":
         import zlib, base64
         in_path = args.input

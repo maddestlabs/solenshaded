@@ -19,6 +19,19 @@ enum class MenuAnchor : uint8_t {
     TopRight = 3
 };
 
+struct ThemePalette {
+    float woodR0{0.30f}, woodG0{0.16f}, woodB0{0.08f};
+    float woodR1{0.16f}, woodG1{0.08f}, woodB1{0.04f};
+    float trimR{0.85f}, trimG{0.72f}, trimB{0.30f};
+    float feltR0{0.07f}, feltG0{0.25f}, feltB0{0.13f};
+    float feltR1{0.03f}, feltG1{0.14f}, feltB1{0.07f};
+    float cardBackR0{0.08f}, cardBackG0{0.22f}, cardBackB0{0.12f};
+    float cardBackR1{0.04f}, cardBackG1{0.12f}, cardBackB1{0.06f};
+    float accentR{0.40f}, accentG{0.90f}, accentB{0.50f};
+};
+
+ThemePalette getPalette(TableThemeId theme) noexcept;
+
 /**
  * 100% Procedural Hardwood 3.0 & Enshaded Solitaire Renderer.
  * Synthesizes carved hardwood frames, baize/obsidian surfaces, directional drop shadows,
@@ -45,7 +58,8 @@ public:
         float gestureStartX = 0.0f,
         float gestureStartY = 0.0f,
         float gestureCurX = 0.0f,
-        float gestureCurY = 0.0f
+        float gestureCurY = 0.0f,
+        const eatsbits::ui::LightSource2D* dynamicLight = nullptr
     );
 
     static bool renderToPng(
@@ -73,7 +87,7 @@ public:
 };
 
 /**
- * Load a card deck (.eats, .png, .svg) or custom table theme (.eats) into the active interactive session.
+ * Load a card deck (.eats, .png, .jpg, .jpeg, .svg) or custom table theme (.eats) into the active interactive session.
  */
 bool loadFile(const std::string& filePath);
 

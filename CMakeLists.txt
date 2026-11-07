@@ -100,10 +100,16 @@ endif()
 # 4. SolEnshaded Procedural Table Renderer Library
 add_library(solenshaded_render STATIC
     src/render/table_renderer.cpp
+    src/render/dynamic_light.cpp
     src/render/card_texture_cache.cpp
     src/render/card_canvas.cpp
     src/render/procedural_background.cpp
     src/render/proctex_api.cpp
+    src/game/settings_manager.cpp
+    src/game/session_manager.cpp
+    src/ui/svg_icon_renderer.cpp
+    src/ui/settings_dialog.cpp
+    src/ui/loading_dialog.cpp
 )
 target_include_directories(solenshaded_render PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -129,7 +135,7 @@ if(EMSCRIPTEN)
     set_target_properties(solenshaded_web PROPERTIES
         OUTPUT_NAME "solenshaded"
         SUFFIX ".html"
-        LINK_FLAGS "-O3 -msimd128 -sNO_EXIT_RUNTIME=1 -fexceptions --use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1 -sEXPORTED_FUNCTIONS=['_main','_solenshaded_load_file_from_web'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS'] --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/classic.eats@/decks/classic.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/themes/emerald_lawn.eats@/themes/emerald_lawn.eats --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
+        LINK_FLAGS "-O3 -msimd128 -sNO_EXIT_RUNTIME=1 -fexceptions --use-port=emdawnwebgpu -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1 -sEXPORTED_FUNCTIONS=['_main','_solenshaded_load_file_from_web'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS'] --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/solenshade.eats@/decks/solenshade.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/classic.eats@/decks/classic.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/minimal.eats@/decks/minimal.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/royal_casino.eats@/decks/royal_casino.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/engraved_intaglio.eats@/decks/engraved_intaglio.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/imperial_baroque.eats@/decks/imperial_baroque.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/decks/tavern_klondike.eats@/decks/tavern_klondike.eats --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/themes@/themes --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
     )
     add_custom_command(TARGET solenshaded_web POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

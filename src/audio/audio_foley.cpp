@@ -400,6 +400,12 @@ void AudioFoleyEngine::mixSamples(float* outInterleavedStereo, uint32_t frameCou
     }
     readIdx_.store(r, std::memory_order_release);
 
+    if (muted_.load(std::memory_order_relaxed)) {
+        std::fill(outInterleavedStereo, outInterleavedStereo + frameCount * 2, 0.0f);
+        return;
+    }
+    const float masterVol = masterVolume_.load(std::memory_order_relaxed);
+
     for (uint32_t f = 0; f < frameCount; ++f) {
         float mix = 0.0f;
 
@@ -550,7 +556,7 @@ void AudioFoleyEngine::mixSamples(float* outInterleavedStereo, uint32_t frameCou
         }
 
         // Soft saturation limiter to preserve dynamics without harsh digital clipping
-        mix = std::clamp(mix, -0.92f, 0.92f);
+        mix = std::clamp(mix * masterVol, -0.92f, 0.92f);
         outInterleavedStereo[f * 2 + 0] = mix;
         outInterleavedStereo[f * 2 + 1] = mix;
     }

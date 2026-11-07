@@ -2629,13 +2629,38 @@ public:
         reallocateMsaaTexture(width, height);
     }
 
+    struct GpuUniforms {
+        float viewport[2];
+        float gamma;
+        float time;
+        float lightPos[3];
+        float lightIntensity;
+        float lightColor[4];
+        float ambientLight[4];
+    };
+
     void beginPass(float width, float height) override {
         width_ = static_cast<uint32_t>(std::round(width));
         height_ = static_cast<uint32_t>(std::round(height));
         if (device_ && uniformBuffer_) {
-            float gammaVal = isSrgbSurface_ ? 2.2f : 1.0f;
-            float vp[4] = { width, height, gammaVal, 0.0f };
-            wgpuQueueWriteBuffer(wgpuDeviceGetQueue(device_), uniformBuffer_, 0, vp, sizeof(vp));
+            GpuUniforms ubo{};
+            ubo.viewport[0] = width;
+            ubo.viewport[1] = height;
+            ubo.gamma = isSrgbSurface_ ? 2.2f : 1.0f;
+            ubo.time = shaderTime_;
+            ubo.lightPos[0] = globalLight_.x;
+            ubo.lightPos[1] = globalLight_.y;
+            ubo.lightPos[2] = globalLight_.z;
+            ubo.lightIntensity = globalLight_.intensity;
+            ubo.lightColor[0] = lightColor_[0];
+            ubo.lightColor[1] = lightColor_[1];
+            ubo.lightColor[2] = lightColor_[2];
+            ubo.lightColor[3] = lightColor_[3];
+            ubo.ambientLight[0] = ambientLight_[0];
+            ubo.ambientLight[1] = ambientLight_[1];
+            ubo.ambientLight[2] = ambientLight_[2];
+            ubo.ambientLight[3] = ambientLight_[3];
+            wgpuQueueWriteBuffer(wgpuDeviceGetQueue(device_), uniformBuffer_, 0, &ubo, sizeof(ubo));
         }
         if (!customTargetView_ && currentBackBufferView_) {
             wgpuTextureViewRelease(currentBackBufferView_);
@@ -2860,13 +2885,35 @@ public:
         customTargetView_ = static_cast<WGPUTextureView>(view);
     }
 
+    void setGlobalLight(const LightSource2D& light,
+                        float colR, float colG, float colB,
+                        float ambR, float ambG, float ambB) override {
+        globalLight_ = light;
+        lightColor_[0] = colR;
+        lightColor_[1] = colG;
+        lightColor_[2] = colB;
+        lightColor_[3] = light.intensity;
+        ambientLight_[0] = ambR;
+        ambientLight_[1] = ambG;
+        ambientLight_[2] = ambB;
+        ambientLight_[3] = 1.0f;
+    }
+
+    void setShaderTime(float timeSeconds) override {
+        shaderTime_ = timeSeconds;
+    }
+
 private:
     void initShadersAndPipeline() {
         static const char* wgslSource = R"(
             struct Uniforms {
                 viewport: vec2<f32>,
                 gamma: f32,
-                pad: f32,
+                time: f32,
+                lightPos: vec3<f32>,
+                lightIntensity: f32,
+                lightColor: vec4<f32>,
+                ambientLight: vec4<f32>,
             };
 
             @group(0) @binding(0) var fontTexture: texture_2d<f32>;
@@ -2881,6 +2928,7 @@ private:
                 @location(2) color: u32,
                 @location(3) mode: u32,
                 @location(4) pad: vec2<f32>,
+                @location(5) localUV: vec2<f32>,
             };
 
             struct VertexOutput {
@@ -2891,6 +2939,8 @@ private:
                 @location(3) localPos: vec2<f32>,
                 @location(4) @interpolate(flat) halfSize: vec2<f32>,
                 @location(5) @interpolate(flat) radius: f32,
+                @location(6) localUV: vec2<f32>,
+                @location(7) worldPos: vec2<f32>,
             };
 
             @vertex
@@ -2907,6 +2957,8 @@ private:
                 out.localPos = in.pad;
                 out.halfSize = abs(in.pad);
                 out.radius = in.uv.x;
+                out.localUV = in.localUV;
+                out.worldPos = in.position;
 
                 // Screen pixels to NDC [-1, 1] using dynamic viewport
                 let ndcX = (in.position.x / uniforms.viewport.x) * 2.0 - 1.0;
@@ -2930,7 +2982,19 @@ private:
                     }
                     col = vec4<f32>(in.color.rgb, in.color.a * alpha);
                 } else if (in.mode == 3u) {
-                    let tex = textureSampleLevel(rgbaTexture, fontSampler, in.uv, 0.0);
+                    var sampleUV = in.uv;
+                    let distortAmt = in.localPos.x;
+                    if (distortAmt > 0.0001) {
+                        let p = in.uv * 120.0;
+                        let sVal = sin(p.x * 2.1 + p.y * 3.7) * cos(p.x * 1.3 - p.y * 2.9);
+                        let scratchBand = abs(sin(p.x * 0.4 + p.y * 0.9 + sVal * 1.2));
+                        if (scratchBand < 0.16) {
+                            let dFade = (0.16 - scratchBand) * distortAmt;
+                            let gradDir = vec2<f32>(cos(p.y * 4.0), sin(p.x * 4.0));
+                            sampleUV = sampleUV + gradDir * dFade;
+                        }
+                    }
+                    let tex = textureSampleLevel(rgbaTexture, fontSampler, sampleUV, 0.0);
                     col = tex * in.color;
                 } else if (in.mode == 6u) {
                     let tex = textureSampleLevel(bgTexture, fontSampler, in.uv, 0.0);
@@ -2952,7 +3016,7 @@ private:
         WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device_, &smDesc);
 
         // Vertex layout
-        WGPUVertexAttribute attribs[5]{};
+        WGPUVertexAttribute attribs[6]{};
         attribs[0].format = WGPUVertexFormat_Float32x2; // position
         attribs[0].offset = 0;
         attribs[0].shaderLocation = 0;
@@ -2973,10 +3037,14 @@ private:
         attribs[4].offset = offsetof(Vertex2D, pad);
         attribs[4].shaderLocation = 4;
 
+        attribs[5].format = WGPUVertexFormat_Float32x2; // localUV for edge bevels & rim lighting
+        attribs[5].offset = offsetof(Vertex2D, localUV);
+        attribs[5].shaderLocation = 5;
+
         WGPUVertexBufferLayout vbLayout{};
         vbLayout.arrayStride = sizeof(Vertex2D);
         vbLayout.stepMode = WGPUVertexStepMode_Vertex;
-        vbLayout.attributeCount = 5;
+        vbLayout.attributeCount = 6;
         vbLayout.attributes = attribs;
 
         WGPURenderPipelineDescriptor plDesc{};
@@ -3038,10 +3106,10 @@ private:
         tvDesc.aspect = WGPUTextureAspect_All;
         fontTextureView_ = wgpuTextureCreateView(fontTexture_, &tvDesc);
 
-        // 2. Create RGBA texture for rasterized SVG bitmaps & icons & card atlas (2048x2048 RGBA8Unorm)
+        // 2. Create RGBA texture for rasterized SVG bitmaps & icons & card atlas (4096x4096 RGBA8Unorm)
         WGPUTextureDescriptor rgbaTexDesc{};
         rgbaTexDesc.dimension = WGPUTextureDimension_2D;
-        rgbaTexDesc.size = WGPUExtent3D{ 2048, 2048, 1 };
+        rgbaTexDesc.size = WGPUExtent3D{ 4096, 4096, 1 };
         rgbaTexDesc.format = WGPUTextureFormat_RGBA8Unorm;
         rgbaTexDesc.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
         rgbaTexDesc.mipLevelCount = 1;
@@ -3059,7 +3127,9 @@ private:
         rgbaTextureView_ = wgpuTextureCreateView(rgbaTexture_, &rtvDesc);
 
         // 3. Create dedicated Background / Large Surface Texture (2048x2048 RGBA8Unorm)
-        bgTexture_ = wgpuDeviceCreateTexture(device_, &rgbaTexDesc);
+        WGPUTextureDescriptor bgTexDesc = rgbaTexDesc;
+        bgTexDesc.size = WGPUExtent3D{ 2048, 2048, 1 };
+        bgTexture_ = wgpuDeviceCreateTexture(device_, &bgTexDesc);
         bgTextureView_ = wgpuTextureCreateView(bgTexture_, &rtvDesc);
 
         WGPUSamplerDescriptor sampDesc{};
@@ -3076,13 +3146,29 @@ private:
 
         wgpuShaderModuleRelease(shaderModule);
 
-        // Uniform buffer for viewport dimension upload
+        // Uniform buffer for viewport, lighting, and time upload
         WGPUBufferDescriptor uboDesc{};
-        uboDesc.size = 16;
+        uboDesc.size = 64;
         uboDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
         uniformBuffer_ = wgpuDeviceCreateBuffer(device_, &uboDesc);
-        float initVp[4] = { static_cast<float>(width_), static_cast<float>(height_), isSrgbSurface_ ? 2.2f : 1.0f, 0.0f };
-        wgpuQueueWriteBuffer(wgpuDeviceGetQueue(device_), uniformBuffer_, 0, initVp, sizeof(initVp));
+        GpuUniforms initUbo{};
+        initUbo.viewport[0] = static_cast<float>(width_);
+        initUbo.viewport[1] = static_cast<float>(height_);
+        initUbo.gamma = isSrgbSurface_ ? 2.2f : 1.0f;
+        initUbo.time = 0.0f;
+        initUbo.lightPos[0] = globalLight_.x;
+        initUbo.lightPos[1] = globalLight_.y;
+        initUbo.lightPos[2] = globalLight_.z;
+        initUbo.lightIntensity = globalLight_.intensity;
+        initUbo.lightColor[0] = lightColor_[0];
+        initUbo.lightColor[1] = lightColor_[1];
+        initUbo.lightColor[2] = lightColor_[2];
+        initUbo.lightColor[3] = lightColor_[3];
+        initUbo.ambientLight[0] = ambientLight_[0];
+        initUbo.ambientLight[1] = ambientLight_[1];
+        initUbo.ambientLight[2] = ambientLight_[2];
+        initUbo.ambientLight[3] = ambientLight_[3];
+        wgpuQueueWriteBuffer(wgpuDeviceGetQueue(device_), uniformBuffer_, 0, &initUbo, sizeof(initUbo));
 
         // Bind group matching layout (font texture, sampler, uniforms, rgba card atlas, bg texture)
         WGPUBindGroupEntry entries[5]{};
@@ -3093,7 +3179,7 @@ private:
         entries[2].binding = 2;
         entries[2].buffer = uniformBuffer_;
         entries[2].offset = 0;
-        entries[2].size = 16;
+        entries[2].size = 64;
         entries[3].binding = 3;
         entries[3].textureView = rgbaTextureView_;
         entries[4].binding = 4;
@@ -3144,6 +3230,10 @@ private:
     WGPUTexture bgTexture_{nullptr};
     WGPUTextureView bgTextureView_{nullptr};
     WGPUBuffer uniformBuffer_{nullptr};
+    LightSource2D globalLight_{640.0f, 200.0f, 550.0f, 1.0f};
+    float lightColor_[4]{1.04f, 1.00f, 0.94f, 1.0f};
+    float ambientLight_[4]{0.35f, 0.35f, 0.35f, 1.0f};
+    float shaderTime_{0.0f};
     WGPUBindGroup bindGroup1x_{nullptr};
     WGPUBindGroup bindGroup4x_{nullptr};
     WGPUBindGroup bindGroup_{nullptr};
@@ -3318,6 +3408,20 @@ void BatchRenderer2D::setBlendMode(BlendMode mode) {
     blendMode_ = mode;
     if (backend_) {
         backend_->setBlendMode(mode);
+    }
+}
+
+void BatchRenderer2D::setGlobalLight(const LightSource2D& light,
+                                    float colR, float colG, float colB,
+                                    float ambR, float ambG, float ambB) {
+    if (backend_) {
+        backend_->setGlobalLight(light, colR, colG, colB, ambR, ambG, ambB);
+    }
+}
+
+void BatchRenderer2D::setShaderTime(float timeSeconds) {
+    if (backend_) {
+        backend_->setShaderTime(timeSeconds);
     }
 }
 
@@ -3559,7 +3663,8 @@ void BatchRenderer2D::drawTriangleTextured(float x0, float y0, float u0, float v
 }
 
 void BatchRenderer2D::drawTexturedPolygon(const Point2D* points, const Point2D* uvs, size_t count,
-                                         float r, float g, float b, float a) {
+                                         float r, float g, float b, float a,
+                                         float scratchDistortion) {
     if (!points || !uvs || count < 3) return;
     uint32_t col = packColor(r, g, b, a);
     std::vector<Vertex2D> v(count);
@@ -3574,7 +3679,7 @@ void BatchRenderer2D::drawTexturedPolygon(const Point2D* points, const Point2D* 
         vert.v = uvs[i].y;
         vert.color = col;
         vert.mode = VertexMode::RgbaTexture;
-        vert.pad[0] = 0.0f;
+        vert.pad[0] = scratchDistortion;
         vert.pad[1] = 0.0f;
         v[i] = vert;
     }
@@ -3712,7 +3817,8 @@ void BatchRenderer2D::drawQuadTextured3D(
 void BatchRenderer2D::drawTexturedRoundedRectGpu(
     float x, float y, float w, float h, float radius,
     float u0, float v0, float u1, float v1,
-    float r, float g, float b, float a
+    float r, float g, float b, float a,
+    float scratchDistortion
 ) {
     if (w <= 0.0f || h <= 0.0f) return;
     uint32_t col = packColor(r, g, b, a);
@@ -3754,8 +3860,10 @@ void BatchRenderer2D::drawTexturedRoundedRectGpu(
         v[i].v = v0 + localUV[i].y * (v1 - v0);
         v[i].color = col;
         v[i].mode = VertexMode::RgbaTexture;
-        v[i].pad[0] = 0.0f;
+        v[i].pad[0] = scratchDistortion;
         v[i].pad[1] = 0.0f;
+        v[i].localUV[0] = localUV[i].x;
+        v[i].localUV[1] = localUV[i].y;
     }
 
     for (size_t i = 1; i + 1 < 16; ++i) {

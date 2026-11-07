@@ -163,9 +163,8 @@ $webDecksDir = Join-Path $buildDir "decks"
 if (-not (Test-Path $webDecksDir)) {
     New-Item -ItemType Directory -Path $webDecksDir -Force | Out-Null
 }
-$steampunkSrc = Join-Path $rootDir "decks\steampunk.eats"
-if (Test-Path $steampunkSrc) {
-    Copy-Item -Path $steampunkSrc -Destination (Join-Path $webDecksDir "steampunk.eats") -Force
+Get-ChildItem -Path (Join-Path $rootDir "decks") -Filter "*.eats" | ForEach-Object {
+    Copy-Item -Path $_.FullName -Destination (Join-Path $webDecksDir $_.Name) -Force
 }
 
 # ------------------------------------------------------------------

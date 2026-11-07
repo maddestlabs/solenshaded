@@ -1,3 +1,6 @@
+# Assets & prompt tooling
+assets/
+
 # Build and temporary output directories
 build/
 build-web/
@@ -5,6 +8,7 @@ bin/
 out/
 _site/
 decks/*.bin
+decks/*.png
 
 # CMake & Ninja artifacts
 CMakeCache.txt

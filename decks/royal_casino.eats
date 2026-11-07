@@ -17,7 +17,9 @@ def on_draw_card_face(ctx, rank, suit, w, h):
 
     # 2. Luxury suit palette: Imperial Crimson for red suits, Midnight Charcoal for black suits
     is_red = (suit == "hearts" or suit == "diamonds")
-    pip_color = "#b2182b" if is_red else "#1a1c23"
+    pip_color = "#1a1c23"
+    if is_red:
+        pip_color = "#b2182b"
 
     # 3. Corner indices (top-left & 180-degree inverted bottom-right)
     classic_deck.draw_corner_indices(ctx, rank, suit, w, h, pip_color, 24.0)

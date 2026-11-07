@@ -23,12 +23,26 @@ public:
 
     [[nodiscard]] GameVariant variant() const noexcept { return variant_; }
     [[nodiscard]] uint32_t seed() const noexcept { return seed_; }
+    [[nodiscard]] uint32_t rngState() const noexcept { return rngState_; }
     [[nodiscard]] int32_t score() const noexcept { return score_; }
     [[nodiscard]] uint32_t moveCount() const noexcept { return moveCount_; }
     [[nodiscard]] float elapsedSeconds() const noexcept { return elapsedSeconds_; }
     [[nodiscard]] float victorySeconds() const noexcept { return victorySeconds_; }
     [[nodiscard]] bool isVictory() const noexcept;
     [[nodiscard]] bool canAutoFinish() const noexcept;
+
+    // Full session state restoration
+    bool restoreSessionState(
+        uint32_t seed,
+        uint32_t rngState,
+        GameVariant variant,
+        int32_t score,
+        uint32_t moveCount,
+        float elapsedSeconds,
+        const std::vector<Pile>& piles,
+        const std::vector<MoveCommand>& undoStack,
+        const std::vector<MoveCommand>& redoStack
+    );
 
     // Layout calculation for responsive desktop & mobile aspect ratios
     void computeLayout(float viewportWidth, float viewportHeight);
@@ -60,11 +74,23 @@ public:
 
     [[nodiscard]] const std::vector<Pile>& piles() const noexcept { return piles_; }
     [[nodiscard]] std::vector<Pile>& piles() noexcept { return piles_; }
+    [[nodiscard]] const std::vector<MoveCommand>& undoStack() const noexcept { return undoStack_; }
+    [[nodiscard]] const std::vector<MoveCommand>& redoStack() const noexcept { return redoStack_; }
     [[nodiscard]] const HintMove& activeHint() const noexcept { return activeHint_; }
     void clearHint() noexcept;
 
     [[nodiscard]] static const char* variantName(GameVariant v) noexcept;
     [[nodiscard]] static const char* themeName(TableThemeId t) noexcept;
+    [[nodiscard]] static const char* layoutModeName(ResponsiveLayoutMode m) noexcept;
+    [[nodiscard]] static const char* stockPositionName(StockPosition p) noexcept;
+
+    void setLayoutMode(ResponsiveLayoutMode mode) noexcept;
+    [[nodiscard]] ResponsiveLayoutMode layoutMode() const noexcept { return layoutMode_; }
+    void setStockPosition(StockPosition pos) noexcept;
+    [[nodiscard]] StockPosition stockPosition() const noexcept { return stockPosition_; }
+    [[nodiscard]] float viewportWidth() const noexcept { return viewportW_; }
+    [[nodiscard]] float viewportHeight() const noexcept { return viewportH_; }
+    [[nodiscard]] bool isMobileLayout() const noexcept;
 
 private:
     uint32_t nextRandom() noexcept;
@@ -73,7 +99,9 @@ private:
     uint32_t seed_{2026u};
     uint32_t rngState_{2026u};
     GameVariant variant_{GameVariant::KlondikeDraw1};
-    TableThemeId theme_{TableThemeId::EmeraldLawn};
+    TableThemeId theme_{TableThemeId::PastelTan};
+    ResponsiveLayoutMode layoutMode_{ResponsiveLayoutMode::Auto};
+    StockPosition stockPosition_{StockPosition::Auto};
 
     int32_t score_{0};
     uint32_t moveCount_{0};
@@ -83,6 +111,7 @@ private:
     float viewportH_{720.0f};
     float cardW_{96.0f};
     float cardH_{136.0f};
+    float cardDeviation_{0.25f};
 
     std::vector<Pile> piles_;
     std::vector<MoveCommand> undoStack_;
@@ -92,6 +121,8 @@ private:
 public:
     [[nodiscard]] float cardWidth() const noexcept { return cardW_; }
     [[nodiscard]] float cardHeight() const noexcept { return cardH_; }
+    [[nodiscard]] float cardDeviation() const noexcept { return cardDeviation_; }
+    void setCardDeviation(float dev) noexcept;
 };
 
 } // namespace solenshaded

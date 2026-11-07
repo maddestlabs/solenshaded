@@ -368,11 +368,15 @@
     </div>
 
     <!-- Hidden File Picker for manual file loading -->
-    <input type="file" id="eats-file-picker" accept=".eats" style="display: none;">
+    <input type="file" id="eats-file-picker" accept=".eats,.jpg,.jpeg,.png,.svg" style="display: none;">
 
     <!-- Floating Luxury Web Toolbar -->
     <div class="sol-web-toolbar">
-        <button id="btn-load-steampunk" class="sol-web-btn" title="Stream high-res Steampunk AI Deck on demand (26MB)">
+        <button id="btn-load-baroque" class="sol-web-btn" title="Stream Baroque Arches Masterpiece Deck on demand (4MB)">
+            <span>🏛️</span>
+            <span id="btn-baroque-label">Baroque Arches</span>
+        </button>
+        <button id="btn-load-steampunk" class="sol-web-btn" title="Stream high-res Steampunk AI Deck on demand (6.5MB)">
             <span>⚜️</span>
             <span id="btn-steampunk-label">Steampunk Deck</span>
         </button>
@@ -466,8 +470,10 @@
         });
 
         async function handleEatsFile(file) {
-            if (!file.name.endsWith('.eats')) {
-                showToast('Please drop a valid .eats recipe file.');
+            const lower = file.name.toLowerCase();
+            const isValid = lower.endsWith('.eats') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.svg');
+            if (!isValid) {
+                showToast('Please drop a valid .eats, .jpg, .png, or .svg file.');
                 return;
             }
 
@@ -489,7 +495,7 @@
                         if (ok) {
                             showToast('Successfully loaded: ' + file.name);
                         } else {
-                            showToast('Failed to parse .eats content: ' + file.name);
+                            showToast('Failed to parse: ' + file.name);
                         }
                     }
                 }
@@ -605,6 +611,51 @@
             }
         }
 
+        let isBaroqueActive = false;
+        window.loadBaroqueDeck = async function() {
+            const btnLabel = document.getElementById('btn-baroque-label');
+            const btn = document.getElementById('btn-load-baroque');
+
+            if (isBaroqueActive) {
+                if (typeof FS !== 'undefined' && typeof Module !== 'undefined' && Module.ccall) {
+                    const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], ['decks/classic.eats']);
+                    if (ok) {
+                        isBaroqueActive = false;
+                        if (btnLabel) btnLabel.innerText = 'Baroque Arches';
+                        if (btn) btn.classList.remove('active-steampunk');
+                        showToast('Switched to Classic SVG Deck.');
+                        return;
+                    }
+                }
+            }
+
+            if (typeof FS !== 'undefined') {
+                let exists = false;
+                try {
+                    const stat = FS.stat('/decks/baroque_arches.eats');
+                    if (stat && stat.size > 0) exists = true;
+                } catch (e) {}
+
+                if (exists && typeof Module !== 'undefined' && Module.ccall) {
+                    const ok = Module.ccall('solenshaded_load_file_from_web', 'boolean', ['string'], ['/decks/baroque_arches.eats']);
+                    if (ok) {
+                        isBaroqueActive = true;
+                        if (btnLabel) btnLabel.innerText = 'Classic SVG Deck';
+                        if (btn) btn.classList.add('active-steampunk');
+                        showToast('Activated Baroque Arches Deck.');
+                        return;
+                    }
+                }
+            }
+
+            const success = await loadEatsFromUrl('./decks/baroque_arches.eats', 'baroque_arches.eats');
+            if (success) {
+                isBaroqueActive = true;
+                if (btnLabel) btnLabel.innerText = 'Classic SVG Deck';
+                if (btn) btn.classList.add('active-steampunk');
+            }
+        };
+
         let isSteampunkActive = false;
         window.loadSteampunkDeck = async function() {
             const btnLabel = document.getElementById('btn-steampunk-label');
@@ -704,6 +755,13 @@
         };
 
         function setupWebControls() {
+            const btnBaroque = document.getElementById('btn-load-baroque');
+            if (btnBaroque) {
+                btnBaroque.addEventListener('click', () => {
+                    window.loadBaroqueDeck();
+                });
+            }
+
             const btnSteampunk = document.getElementById('btn-load-steampunk');
             if (btnSteampunk) {
                 btnSteampunk.addEventListener('click', () => {

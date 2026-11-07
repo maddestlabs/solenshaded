@@ -46,15 +46,24 @@ sol.set_deck(deck_blob, {{
     print(f"[SolEnshaded] Packaged {svg_path} ({len(svg_data):,} bytes) -> {out_eats_path} ({os.path.getsize(out_eats_path):,} bytes)")
     return True
 
-def package_png_deck(png_path, out_eats_path, name="Steampunk AI", theme_id="steampunk"):
-    if not os.path.exists(png_path):
-        print(f"Error: {png_path} not found.")
+def package_bitmap_deck(img_path, out_eats_path, name="Custom Bitmap", theme_id="custom", format_override=None):
+    if not os.path.exists(img_path):
+        print(f"Error: {img_path} not found.")
         return False
-    with open(png_path, "rb") as f:
-        png_data = f.read()
+    with open(img_path, "rb") as f:
+        img_data = f.read()
 
-    b64_png = base64.b64encode(png_data).decode("ascii")
+    b64_img = base64.b64encode(img_data).decode("ascii")
 
+    fmt = format_override
+    if not fmt:
+        ext = os.path.splitext(img_path)[1].lower()
+        if ext in (".jpg", ".jpeg"):
+            fmt = "jpg"
+        else:
+            fmt = "png"
+
+    desc_type = "JPG" if fmt == "jpg" else "PNG"
     content = f'''# SolEnshaded Deck Recipe — {name}
 # Connects Hardwood Solitaire 3.0 tactile style with high-res raster asset embedding.
 
@@ -62,14 +71,14 @@ sol.set_theme({{
     id: "{theme_id}",
     name: "{name}",
     author: "SolEnshaded / AI",
-    description: "High-resolution 3240x3024 9x6 PNG master sheet embedded in Eatscript.",
+    description: "High-resolution 3240x3024 9x6 {desc_type} master sheet embedded in Eatscript.",
     version: 1
 }})
 
-deck_blob = """{b64_png}"""
+deck_blob = """{b64_img}"""
 
 sol.set_deck(deck_blob, {{
-    format: "png",
+    format: "{fmt}",
     card_w: 360,
     card_h: 504,
     theme_id: "{theme_id}"
@@ -78,8 +87,14 @@ sol.set_deck(deck_blob, {{
     with open(out_eats_path, "w", encoding="utf-8") as f:
         f.write(content)
 
-    print(f"[SolEnshaded] Packaged {png_path} ({len(png_data):,} bytes) -> {out_eats_path} ({os.path.getsize(out_eats_path):,} bytes)")
+    print(f"[SolEnshaded] Packaged {img_path} ({len(img_data):,} bytes) -> {out_eats_path} ({os.path.getsize(out_eats_path):,} bytes)")
     return True
+
+def package_png_deck(png_path, out_eats_path, name="Steampunk AI", theme_id="steampunk"):
+    return package_bitmap_deck(png_path, out_eats_path, name=name, theme_id=theme_id, format_override="png")
+
+def package_jpg_deck(jpg_path, out_eats_path, name="Baroque Arches", theme_id="baroque_noir"):
+    return package_bitmap_deck(jpg_path, out_eats_path, name=name, theme_id=theme_id, format_override="jpg")
 
 if __name__ == "__main__":
     package_svg_deck("decks/classic_svg.svg", "decks/classic.eats", name="Classic Victorian", theme_id="classic")

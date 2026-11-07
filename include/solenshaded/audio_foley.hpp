@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <array>
+#include <algorithm>
 
 namespace solenshaded {
 
@@ -48,6 +49,11 @@ public:
 
     void setShufflePreference(ShuffleStyle style) noexcept { shuffleStyle_.store(style, std::memory_order_relaxed); }
     ShuffleStyle getShufflePreference() const noexcept { return shuffleStyle_.load(std::memory_order_relaxed); }
+
+    void setMasterVolume(float vol) noexcept { masterVolume_.store(std::clamp(vol, 0.0f, 1.0f), std::memory_order_relaxed); }
+    [[nodiscard]] float getMasterVolume() const noexcept { return masterVolume_.load(std::memory_order_relaxed); }
+    void setMuted(bool m) noexcept { muted_.store(m, std::memory_order_relaxed); }
+    [[nodiscard]] bool isMuted() const noexcept { return muted_.load(std::memory_order_relaxed); }
 
     struct BiquadCoeffs {
         float b0{1.0f}, b1{0.0f}, b2{0.0f};
@@ -129,6 +135,8 @@ private:
     std::atomic<uint32_t> readIdx_{0};
 
     std::atomic<ShuffleStyle> shuffleStyle_{ShuffleStyle::Soft};
+    std::atomic<float> masterVolume_{0.85f};
+    std::atomic<bool> muted_{false};
     uint32_t rngState_{0x9E3779B9u};
     uint32_t dealAlternator_{0};
     bool initialized_{false};

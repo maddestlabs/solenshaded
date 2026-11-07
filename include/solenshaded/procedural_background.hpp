@@ -7,6 +7,8 @@
 #include "eatsbits/ui/geometry.hpp"
 #include <cstdint>
 #include <memory>
+#include <functional>
+#include <string>
 
 namespace solenshaded {
 
@@ -56,6 +58,17 @@ public:
      * Invalidate cached procedural textures (e.g. on window resize or theme switch).
      */
     void invalidateCache() noexcept;
+
+    /**
+     * Pre-bake and synthesize procedural table surface textures for a given theme offline.
+     * Invokes progress callback and supports early cooperative cancellation.
+     */
+    bool prebakeTheme(
+        TableThemeId theme,
+        float w, float h,
+        const eatsbits::ui::LightSource2D& light,
+        const std::function<bool(float progress, const std::string& status)>& onProgress = nullptr
+    );
 
     /**
      * Enable or disable seamless AmbientCG PBR texture baking.
